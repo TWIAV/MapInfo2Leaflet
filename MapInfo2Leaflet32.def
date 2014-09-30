@@ -1,0 +1,134 @@
+'************************************************************************************
+'**  MapInfo2Leaflet32 (for the 'classic' 32 bit version MapInfo Professional 9.5 or higher)
+'**  
+'**  
+'**  Author:	Egge-Jan Pollé
+'**  Date:		26 September 2014
+'**  Version:	AppVersion (see below)
+'************************************************************************************
+Include "MAPBASIC.DEF"
+Include "ICONS.DEF"
+Include "MENU.DEF"
+
+Declare Sub Main
+Declare Sub ExportDialog
+Declare Sub CreateHTML
+Declare Sub EnableLayerSelection
+Declare Sub ExpDlgOKBtnHandler
+Declare Sub LayerSettingsDialog
+Declare Sub StyleSettingsDialog
+Declare Sub CheckForHyperlinks
+Declare Sub RemoveHyperLink
+Declare Sub NonAddedColumnsHandler
+Declare Sub AddedColumnsHandler
+Declare Sub ModifyColumnsListPopupAdd
+Declare Sub ModifyColumnsListPopupAddAll
+Declare Sub ModifyColumnsListPopupRemove
+Declare Sub ModifyColumnsListPopupRemoveAll
+Declare Sub ModifyColumnsListPopup (ByVal iOperation As Integer)
+Declare Sub LSDlgOKBtnHandler
+Declare Sub SetHTMLFilePath
+Declare Sub GetPointTables
+
+Declare Sub About
+Declare Sub Bye
+Declare Sub LeafletWebsite
+Declare Sub AddIn_Help
+
+Declare Function IsPointTable(ByVal sTable As String) As Logical
+
+Declare Function ReplaceSubStringWith(	'E.g. replace underscore ("_" or Chr$(95)) with space (" " or Chr$(32)) 
+	ByVal sString2Modify As String		'String with substring to be replaced, e.g. "a_b_c_d"
+	, ByVal sReplaceSubString As String	'Substring to be replaced - one or more characters
+	, ByVal sReplaceWith As String		'Substring to replace with. sReplaceWith may contain sReplaceSubString, i.e. you can replace 'ab' with 'abc'
+	) As String							'Modified string, e.g. "a b c d". Function is case-sensitive.
+
+Declare Function NoOfColumns(ByVal sTab As String, sColumnsList() As String) As Integer
+Declare Function LooksLikeURL(ByVal sPotentialURL As String) As Logical
+
+Declare Method ConvertFileANSItoUTF8 Class "MBExtensions.MBFileConversion" Lib "MBExtensions.dll" (ByVal sFileOld As String, ByVal sFileNew As String)
+Declare Method NoteAgain Class "MBExtensions.MBDialogs" Lib "MBExtensions.dll" (ByVal sNotification As String, ByVal sCaption As String)
+Declare Method AskAgain Class "MBExtensions.MBDialogs" Lib "MBExtensions.dll" (ByVal sQuestion As String, ByVal sCaption As String) As Logical
+Declare Method Warn Class "MBExtensions.MBDialogs" Lib "MBExtensions.dll" (ByVal sWarning As String, ByVal sCaption As String) As Logical
+Declare Method BrowseForFolder Class "MBExtensions.MBDialogs" Lib "MBExtensions.dll" (ByVal sDescription As String, ByVal sFolder As String) As String
+Declare Method OpenFileOrDir Class "MBExtensions.MBFileManagement" Lib "MBExtensions.dll" (ByVal sOpen As String)
+
+' /////     Class "MBExtensions.MBDateAndTime"     /////
+' Allows you to retreive information from a MapBasic Date (i.e. YYYYMMDD) or
+' DateTime (i.e. YYYYMMDDHHMMSSFFF) string
+ 
+' Convert the string to it's equivalent long date string representation
+' (depends on Control Panel > Regional and Language Options)
+Declare Method RegionalLongDate
+    Class "MBExtensions.MBDateAndTime"
+    Lib "MBExtensions.dll" (ByVal sDateString as string) As String
+ 
+' Extract from the string the name of the month in the regional language
+' (depends on Control Panel > Regional and Language Options)
+Declare Method RegionalMonth
+    Class "MBExtensions.MBDateAndTime"
+    Lib "MBExtensions.dll" (ByVal sDateString as string) As String
+ 
+' Extract from the string the name of the weekday in the regional language
+' (depends on Control Panel > Regional and Language Options)
+Declare Method RegionalWeekday
+    Class "MBExtensions.MBDateAndTime"
+    Lib "MBExtensions.dll" (ByVal sDateString as string) As String
+
+Global sTitleWebsite, sHTMLFilePath, sHTMLFilePathTmp, sGeoJSONFilePath, sGeoJSONFilePathTmp, sLayerNamePub, sLayerNameTech, sFFeatureCollection As String
+Global sTableList(), sColumnsList(), sTable2Export As String
+Global sColumnsListPopup(), sColumnsListNonPopup(), sHyperlink As String
+Global lAddColumnNames, lFirstColumnBold As Logical
+Global iPointStyleSetting As Integer
+
+Type tColumn2Export
+	sColName As String
+	lHyperlink As Logical
+	sAlias As String
+End Type
+
+Global Columns2Export() As tColumn2Export
+
+Define AppName "MapInfo2Leaflet"
+Define AppNameMenu "MapInfo&2Leaflet"
+Define AppVersion "0.20"
+
+'Defining Dialog Width and Height
+'This allows you to specify width and height clauses in terms of characters (i.e., Width 30dW, Height 10dH).
+Define dW *4	'Four dialog units equals one character in width
+Define dH *8	'Eight dialog units equals one character in height
+
+'Control IDs in Export Dialog
+Define ExpDlgPUMTableID				601
+Define ExpDlgBtnLaySetID			604
+Define ExpDlgSTStep2ID				612
+Define ExpDlgSTStep3ID				613
+Define ExpDlgSTStep4ID				614
+Define ExpDlgSTStep5ID				615
+Define ExpDlgSTStep6ID				616
+Define ExpDlgSTTitleWebPageID		651
+Define ExpDlgETTitleWebPageID		661
+Define ExpDlgSTHTMLFileID			662
+Define ExpDlgBtnSetHTMLFilePathID	663
+Define ExpDlgETHTMLFilePathID		664
+Define ExpDlgBtnStyleSetID			665
+Define ExpDlgOKBtnID				671
+Define ExpDlgCancelBtnID			681
+
+'Control IDs in Layer Settings Dialog
+Define LSDlgETLNameID			701
+Define LSDlgLBLayersNotAddedID	702
+Define LSDlgCBAddColNmID		703
+Define LSDlgCBCol1BoldID		704
+Define LSDlgLBLayersAddedID		705	
+Define LSDlgBtnAddID			711
+Define LSDlgBtnAddAllID			712
+Define LSDlgBtnRemID			713
+Define LSDlgBtnRemAllID			714
+Define LSDlgGBHLnkID			721
+Define LSDlgSTHLColID			722
+Define LSDlgETHLColID			723
+Define LSDlgSTAliasID			724
+Define LSDlgPUMAliasID			725
+Define LSDlgBtnRemHLID			731
+Define LSDlgOKBtnID				741

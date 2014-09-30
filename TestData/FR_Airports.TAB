@@ -1,0 +1,16 @@
+!table
+!version 300
+!charset WindowsLatin1
+
+Definition Table
+  Type NATIVE Charset "WindowsLatin1"
+  Fields 3
+    OACI Char (4) ;
+    Aéroport Char (50) ;
+    URL Char (86) ;
+begin_metadata
+"\IsReadOnly" = "FALSE"
+"\MapInfo" = ""
+"\MapInfo\TableID" = "d47e2e25-fa94-4f81-84b0-208a15cbd960"
+"\MapInfo\ParentTableID" = "0a05a66f-ebb6-4be0-8beb-77650caf00b8"
+end_metadata

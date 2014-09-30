@@ -1,0 +1,18 @@
+!table
+!version 300
+!charset WindowsLatin1
+
+Definition Table
+  Type NATIVE Charset "WindowsLatin1"
+  Fields 6
+    Name Char (60) ;
+    Address_Line_1 Char (60) ;
+    Address_Line_2 Char (60) ;
+    Address_Line_3 Char (60) ;
+    Address_Line_4 Char (60) ;
+    Website Char (100) ;
+begin_metadata
+"\IsReadOnly" = "FALSE"
+"\MapInfo" = ""
+"\MapInfo\TableID" = "ec1289b2-3633-46aa-b2af-a51b2a15b3f8"
+end_metadata
