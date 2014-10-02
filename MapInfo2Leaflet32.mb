@@ -55,7 +55,7 @@ OnError Goto HandleError
 		iPointStyleSetting = 1
 	End If
 
-	Call GetPointTables
+	Call GetVectorTables
 
 	Dialog
 		Title "Export a MapInfo Table to a Web Page using Leaflet (this version: point data only)"
@@ -104,10 +104,11 @@ Sub CreateHTML
 
 OnError Goto HandleError
 
-Dim i, j, iNumRows As Integer
+Dim i, j, k, iNumRows, iObjectType As Integer
 Dim fX, fY As Float
 Dim aColj, aObjCol, aTooltipCol As Alias
-Dim sCenter, sString, sPopUpString, sColumnText, sValue, sCurDate, sStyleValue, sIconValue, sTooltipString, sMapString As String
+Dim sCenter, sString, sPopUpString, sColumnText, sValue, sCurDate, sStyleValue, sIconValue, sTooltipString,
+	sMapString, sGeoJSONGeomObjType, sCoordinates As String
 
 	sCurDate = CurDate()
 	sCurDate = RegionalLongDate(sCurDate)
@@ -185,9 +186,61 @@ For i = 1 to iNumRows
 		End If
 	NextLabel:
 	Next
+
 	aObjCol = sTable2Export + ".obj"
-	fX = CentroidX(aObjCol)
-	fY = CentroidY(aObjCol)
+
+	iObjectType = ObjectInfo(aObjCol, OBJ_INFO_TYPE)
+
+	Do Case iObjectType
+		'From the GeoJSON Format Specification, on the "coordinates" member of a geometry object:
+		'The order of elements must follow x, y, z order (easting, northing, altitude for coordinates in a projected coordinate
+		'reference system, or longitude, latitude, altitude for coordinates in a geographic coordinate reference system).
+	
+		Case OBJ_TYPE_POINT
+
+			sGeoJSONGeomObjType = "Point"
+			
+			fX = CentroidX(aObjCol)
+			fY = CentroidY(aObjCol)
+			
+			sCoordinates = fX + ", " + fY 'First Longitude (X), then Latitude (Y)
+
+		Case OBJ_TYPE_LINE
+
+			sGeoJSONGeomObjType = "LineString"
+			
+			fX = ObjectGeography(aObjCol, OBJ_GEO_LINEBEGX) 'Starting point
+			fY = ObjectGeography(aObjCol, OBJ_GEO_LINEBEGY)
+			
+			sCoordinates = " [" + fX + ", " + fY + "]," 'First Longitude (X), then Latitude (Y)
+
+			fX = ObjectGeography(aObjCol, OBJ_GEO_LINEENDX) 'End point
+			fY = ObjectGeography(aObjCol, OBJ_GEO_LINEENDY)
+			
+			sCoordinates = sCoordinates + " [" + fX + ", " + fY + "] " 'First Longitude (X), then Latitude (Y)
+
+		Case OBJ_TYPE_PLINE
+
+			sGeoJSONGeomObjType = "LineString"
+			
+			sCoordinates = ""
+			
+			For k = 1 to ObjectInfo(aObjCol, OBJ_INFO_NPNTS)
+			
+				fX = ObjectNodeX(aObjCol, 1, k)
+				fY = ObjectNodeY(aObjCol, 1, k)
+
+				sCoordinates = sCoordinates + " [" + fX + ", " + fY + "]"
+				
+				If k < ObjectInfo(aObjCol, OBJ_INFO_NPNTS) Then
+					sCoordinates = sCoordinates + ","
+				Else
+					sCoordinates = sCoordinates + " "
+				End If
+
+			Next
+
+	End Case
 
 	Print #1, Chr$(9) + Chr$(9) + "{"
 	Print #1, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(34) + "type" + Chr$(34) + ": " + Chr$(34) + "Feature" + Chr$(34) + ","
@@ -196,8 +249,8 @@ For i = 1 to iNumRows
 	Print #1, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(34) + "popupContent" + Chr$(34) + ": " + Chr$(34) + sPopUpString + Chr$(34)
 	Print #1, Chr$(9) + Chr$(9) + Chr$(9) + "},"
 	Print #1, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(34) + "geometry" + Chr$(34) + ": {"
-	Print #1, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(34) + "type" + Chr$(34) + ": " + Chr$(34) + "Point" + Chr$(34) + ","
-	Print #1, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(34) + "coordinates" + Chr$(34) + ": [" + fX + ", " + fY + "]" 'First Longitude (X), then Latitude (Y)
+	Print #1, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(34) + "type" + Chr$(34) + ": " + Chr$(34) + sGeoJSONGeomObjType + Chr$(34) + ","
+	Print #1, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(34) + "coordinates" + Chr$(34) + ": [" + sCoordinates + "]"
 	Print #1, Chr$(9) + Chr$(9) + Chr$(9) + "}"
 	If i < iNumRows Then
 		Print #1, Chr$(9) + Chr$(9) + "},"
@@ -885,7 +938,7 @@ HandleError:
 End Sub SetHTMLFilePath
 
 '*********************************************************************************************
-Sub GetPointTables
+Sub GetVectorTables
 '*********************************************************************************************
 
 OnError GoTo HandleError
@@ -899,7 +952,7 @@ OnError GoTo HandleError
 	
 	For i = 1 to NumTables()
 
-		If IsPointTable(TableInfo(i, TAB_INFO_NAME)) Then
+		If IsVectorTable(TableInfo(i, TAB_INFO_NAME)) Then
 			If NoOfColumns(TableInfo(i, TAB_INFO_NAME), sColumnsList) > 0 Then
 				j = j + 1
 				ReDim sTableList(j)
@@ -913,7 +966,7 @@ Exit Sub
 HandleError:
     Note Error$()
 
-End Sub GetPointTables
+End Sub GetVectorTables
 
 '************************************************************************************
 Sub About
@@ -977,7 +1030,7 @@ End Sub LeafletWebsite
 End Sub AddIn_Help
 
 '************************************************************************************
-Function IsPointTable(ByVal sTable As String) As Logical
+Function IsVectorTable(ByVal sTable As String) As Logical
 
 OnError GoTo HandleError
 
@@ -988,10 +1041,10 @@ OnError GoTo HandleError
 	
 	If TableInfo("TestTable", TAB_INFO_NROWS) = 1 Then
 		Fetch Rec 1 From TestTable
-		If TestTable.Col1 = "Point" Then
-			IsPointTable = TRUE
+		If TestTable.Col1 IN ("Point", "Line", "Polyline") Then
+			IsVectorTable = TRUE
 		Else
-			IsPointTable = FALSE
+			IsVectorTable = FALSE
 		End If
 	End If
 	Close Table TestTable
@@ -999,7 +1052,7 @@ OnError GoTo HandleError
 Exit Function
 '---------------------------
 HandleError:
-    IsPointTable = FALSE
+    IsVectorTable = FALSE
 
 End Function
 

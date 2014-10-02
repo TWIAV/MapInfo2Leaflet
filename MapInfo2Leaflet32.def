@@ -28,14 +28,14 @@ Declare Sub ModifyColumnsListPopupRemoveAll
 Declare Sub ModifyColumnsListPopup (ByVal iOperation As Integer)
 Declare Sub LSDlgOKBtnHandler
 Declare Sub SetHTMLFilePath
-Declare Sub GetPointTables
+Declare Sub GetVectorTables
 
 Declare Sub About
 Declare Sub Bye
 Declare Sub LeafletWebsite
 Declare Sub AddIn_Help
 
-Declare Function IsPointTable(ByVal sTable As String) As Logical
+Declare Function IsVectorTable(ByVal sTable As String) As Logical
 Declare Function LayerIsInMap(ByVal iWindowID As Integer, ByVal sLayerName As String) As Logical
 
 Declare Function ReplaceSubStringWith(	'E.g. replace underscore ("_" or Chr$(95)) with space (" " or Chr$(32)) 
