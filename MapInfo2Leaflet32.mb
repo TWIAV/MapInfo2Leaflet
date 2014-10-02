@@ -3,7 +3,7 @@
 '**  
 '**  
 '**  Author:	Egge-Jan Pollé
-'**  Date:		26 September 2014
+'**  Date:		2 October 2014
 '************************************************************************************
 Include "MapInfo2Leaflet32.def"
 
@@ -47,6 +47,9 @@ Sub ExportDialog
 '************************************************************************************
 
 OnError Goto HandleError
+
+	'Set CoordSys to WGS84
+	Set CoordSys Earth Projection 1, 104
 
 	If iPointStyleSetting = 0 Then
 		iPointStyleSetting = 1
@@ -103,11 +106,8 @@ OnError Goto HandleError
 
 Dim i, j, iNumRows As Integer
 Dim fX, fY As Float
-Dim aColj, aObjCol As Alias
-Dim sCenter, sString, sPopUpString, sColumnText, sValue, sCurDate, sStyleValue As String
-
-	'Set CoordSys to WGS84
-	Set CoordSys Earth Projection 1, 104
+Dim aColj, aObjCol, aTooltipCol As Alias
+Dim sCenter, sString, sPopUpString, sColumnText, sValue, sCurDate, sStyleValue, sIconValue, sTooltipString, sMapString As String
 
 	sCurDate = CurDate()
 	sCurDate = RegionalLongDate(sCurDate)
@@ -133,7 +133,7 @@ OnError Goto HandleErrorDuringFileCreation
 '--------------------------------------------------------------------------
 Print #1, "//Point data exported from MapInfo Professional: " + sTable2Export + ".TAB"
 Print #1, "//Last modified: " + sCurDate
-Print #1, "var " + sFFeatureCollection + " = {"
+Print #1, "var " + sFeatureCollection + " = {"
 Print #1, Chr$(9) + Chr$(34) + "type" + Chr$(34) + ": " + Chr$(34) + "FeatureCollection" + Chr$(34) + ","
 Print #1, Chr$(9) + Chr$(34) + "features" + Chr$(34) + ": ["
 
@@ -142,6 +142,9 @@ iNumRows = TableInfo(sTable2Export, TAB_INFO_NROWS)
 For i = 1 to iNumRows
 	Fetch Rec i From sTable2Export
 	sPopUpString = ""
+	sTooltipString = ""
+	aTooltipCol = sTable2Export + "." + sTooltipCol
+	sTooltipString = aTooltipCol
 	For j = 1 to UBound(Columns2Export)
 		sColumnText = ""
 		aColj = sTable2Export + "." + Columns2Export(j).sColName
@@ -189,6 +192,7 @@ For i = 1 to iNumRows
 	Print #1, Chr$(9) + Chr$(9) + "{"
 	Print #1, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(34) + "type" + Chr$(34) + ": " + Chr$(34) + "Feature" + Chr$(34) + ","
 	Print #1, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(34) + "properties" + Chr$(34) + ": {"
+	Print #1, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(34) + "tooltipContent" + Chr$(34) + ": " + Chr$(34) + sTooltipString + Chr$(34) + ","
 	Print #1, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(34) + "popupContent" + Chr$(34) + ": " + Chr$(34) + sPopUpString + Chr$(34)
 	Print #1, Chr$(9) + Chr$(9) + Chr$(9) + "},"
 	Print #1, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(34) + "geometry" + Chr$(34) + ": {"
@@ -205,7 +209,9 @@ Next
 Print #1, Chr$(9) + "]"
 Print #1, "};"
 
-sCenter = fY + ", " + fX 'Map will be centered on last object added from the table
+'If the table is not present in a Map Window in MapInfo Professional during export
+'the map will be centered on last object added from the table
+sCenter = fY + ", " + fX
 
 '--------------------------------------------------------------------------
 ' Create the html file
@@ -218,6 +224,17 @@ Print #2, Chr$(9) + "<meta http-equiv=" + Chr$(34) + "Content-Type" + Chr$(34) +
 Print #2, Chr$(9) + "<meta name=" + Chr$(34) + "viewport" + Chr$(34) + " content=" + Chr$(34) + "width=device-width, initial-scale=1.0" + Chr$(34) + ">"
 Print #2, Chr$(9) + "<link rel=" + Chr$(34) + "stylesheet" + Chr$(34) + " href=" + Chr$(34) + "http://cdn.leafletjs.com/leaflet-0.7.3/leaflet.css" + Chr$(34) + " />"
 Print #2, Chr$(9) + "<link rel=" + Chr$(34) + "stylesheet" + Chr$(34) + " href=" + Chr$(34) + "default.css" + Chr$(34) + " />"
+
+If iPointStyleSetting = 2 Then
+	Print #2, Chr$(9) + "<style>"
+	Print #2, Chr$(9) + Chr$(9) + ".miMarker {"
+	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "background-color: rgba(0,128,0,.9);"
+	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "border: 3px solid #FF0000;"
+	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "border-radius: 50%;"
+	Print #2, Chr$(9) + Chr$(9) + "}"	
+	Print #2, Chr$(9) + "</style>"
+End If
+
 Print #2, "</head>"
 Print #2, "<body>"
 Print #2, Chr$(9) + "<header>"
@@ -232,12 +249,26 @@ Print #2, Chr$(9) + "</div>"
 Print #2, Chr$(9) + "<script src=" + Chr$(34) + PathToFileName$(sGeoJSONFilePath) + Chr$(34) + " type=" + Chr$(34) + "text/javascript" + Chr$(34) + "></script>"
 Print #2, Chr$(9) + "<script src=" + Chr$(34) + "http://cdn.leafletjs.com/leaflet-0.7.3/leaflet.js" + Chr$(34) + "></script>"
 Print #2, Chr$(9) + "<script>"
-Print #2, Chr$(9) + Chr$(9) + "var map = L.map('map').setView([" + sCenter + "], 12);"
+Print #2, sDatasetBounds
+Print #2
+
+If sFitBounds = "" Then
+	sMapString = "setView([" + sCenter + "], 12)"
+Else
+	sMapString = sFitBounds
+End If
+
+sMapString = sMapString + ".setMaxBounds(bounds);"
+
+Print #2, Chr$(9) + Chr$(9) + "var map = L.map('map')." + sMapString
+Print #2
+Print #2, Chr$(9) + Chr$(9) + "// Limit the minimum zoom level to the bounds of the dataset to prevent users from leaving this area on the map"
+Print #2, Chr$(9) + Chr$(9) + "var mz = map.getBoundsZoom(bounds, false);"
 Print #2
 Print #2, Chr$(9) + Chr$(9) + "var osmAttrib='Map data " + Chr$(169) + " <a href=" + Chr$(34) + "http://openstreetmap.org" + Chr$(34) + ">OpenStreetMap</a> contributors',"
 Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "osmUrl='http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';"
 Print #2
-Print #2, Chr$(9) + Chr$(9) + "var osm = L.tileLayer(osmUrl, {attribution: osmAttrib}).addTo(map);"
+Print #2, Chr$(9) + Chr$(9) + "var osm = L.tileLayer(osmUrl, {attribution: osmAttrib, minZoom: mz}).addTo(map);"
 Print #2
 Print #2, Chr$(9) + Chr$(9) + "function onEachFeature(feature, layer) {"
 Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "if (feature.properties && feature.properties.popupContent) {"
@@ -259,26 +290,21 @@ Do Case iPointStyleSetting
 
 		Save File ApplicationDirectory$() + "blue-arrow.png" As PathToDirectory$(sHTMLFilePath) + "blue-arrow.png"
 
-		sStyleValue = "L.marker(latlng, {icon: blueArrowIcon});"
+		sIconValue = "blueArrowIcon"
 
 	Case 2
 
-		Print #2, Chr$(9) + Chr$(9) + "var mapinfoMarkerOptions = {"
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "radius : 6,"
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "fillColor : " + Chr$(34) + "#008000" + Chr$(34) + ","
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "color : " + Chr$(34) + "#FF0000" + Chr$(34) + ","
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "weight: 2,"
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "opacity: 1,"
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "fillOpacity : 0.9"
-		Print #2, Chr$(9) + Chr$(9) + "};"
+		Print #2, Chr$(9) + Chr$(9) + "var miIcon = L.divIcon({className: 'miMarker'});"
 
-		sStyleValue = "L.circleMarker(latlng, mapinfoMarkerOptions);"
+		sIconValue = "miIcon"
 	
 End Case
 
+sStyleValue = "L.marker(latlng, {icon: " + sIconValue + ", title: feature.properties.tooltipContent});"
+
 Print #2
-sLayerNameTech = sFFeatureCollection + "Layer"
-Print #2, Chr$(9) + Chr$(9) + "var " + sLayerNameTech + " = L.geoJson(" + sFFeatureCollection + ", {"
+sLayerNameTech = sFeatureCollection + "Layer"
+Print #2, Chr$(9) + Chr$(9) + "var " + sLayerNameTech + " = L.geoJson(" + sFeatureCollection + ", {"
 Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "pointToLayer: function (feature, latlng) {"
 Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "return " + sStyleValue
 Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "},"
@@ -343,6 +369,10 @@ Sub EnableLayerSelection
 OnError GoTo HandleError
 
 Dim i As Integer
+Dim fX1, fY1, fX2, fY2 As Float
+
+	sFitBounds = ""
+	sDatasetBounds = ""
 
 	If ReadControlValue(ExpDlgPUMTableID) > 1 Then
 		sTable2Export = sTableList(ReadControlValue(ExpDlgPUMTableID))
@@ -357,10 +387,39 @@ Dim i As Integer
 			sTitleWebsite = ReplaceSubStringWith(sTable2Export, Chr$(95), Chr$(32))
 			Alter Control ExpDlgETTitleWebPageID Value sTitleWebsite
 			sLayerNamePub = ReplaceSubStringWith(sTable2Export, Chr$(95), Chr$(32))  'Visible for the user in the Leaflet Layers Control
-			sFFeatureCollection = ReplaceSubStringWith(LCase$(sLayerNamePub), Chr$(32), Chr$(95)) 'Used as the GeoJSON var name
+			sFeatureCollection = ReplaceSubStringWith(LCase$(sLayerNamePub), Chr$(32), Chr$(95)) 'Used as the GeoJSON var name
+
+			'Take the minimum and maximum x- and y-coordinates of all objects in the table
+			fX1 = TableInfo(sTable2Export, TAB_INFO_MINX)
+			fY1 = TableInfo(sTable2Export, TAB_INFO_MINY)
+			fX2 = TableInfo(sTable2Export, TAB_INFO_MAXX)
+			fY2 = TableInfo(sTable2Export, TAB_INFO_MAXY)
+
+			'Put an additional margin around all the objects in the table
+			fX1 = fX1 - .15*(fX2-fX1)
+			fY1 = fY1 - .15*(fY2-fY1)
+			fX2 = fX2 + .15*(fX2-fX1)
+			fY2 = fY2 + .15*(fY2-fY1)
+			
+			sDatasetBounds = Chr$(9) + Chr$(9) + "// These are the bounds of the " + sFeatureCollection + " dataset, plus a little margin" + Chr$(10)
+			sDatasetBounds = sDatasetBounds + Chr$(9) + Chr$(9) + "var southWest = L.latLng(" + fY1 + ", " + fX1 + ")," + Chr$(10)
+			sDatasetBounds = sDatasetBounds + Chr$(9) + Chr$(9) + Chr$(9) + "northEast = L.latLng(" + fY2 + ", " + fX2 + ")," + Chr$(10)
+			sDatasetBounds = sDatasetBounds + Chr$(9) + Chr$(9) + Chr$(9) + "bounds = L.latLngBounds(southWest, northEast);"
+
 			ReDim sColumnsListPopup(UBound(sColumnsList) - 1)
 			For i = 2 To UBound(sColumnsList)
 				sColumnsListPopup(i - 1) = sColumnsList(i)
+			Next
+			For i = 1 To NumWindows()
+				If LayerIsInMap(WindowID(i), sTable2Export) Then
+					'If the table is present in a Map Window in MapInfo Professional during export
+					'the map in the web page will be fit to the bounds of this Map Window
+					sFitBounds = "fitBounds([["
+					sFitBounds = sFitBounds + MapperInfo(WindowID(i), MAPPER_INFO_MINY) + ", " 'South
+					sFitBounds = sFitBounds + MapperInfo(WindowID(i), MAPPER_INFO_MINX) + "], [" 'West
+					sFitBounds = sFitBounds + MapperInfo(WindowID(i), MAPPER_INFO_MAXY) + ", " 'North
+					sFitBounds = sFitBounds + MapperInfo(WindowID(i), MAPPER_INFO_MAXX) + "]])" 'East
+				End If
 			Next
 		End If
 	Else
@@ -380,7 +439,7 @@ Dim i As Integer
 		Alter Control ExpDlgSTHTMLFileID Disable
 		Alter Control ExpDlgBtnSetHTMLFilePathID Disable
 		sLayerNamePub =  ""
-		sFFeatureCollection = ""
+		sFeatureCollection = ""
 		ReDim sColumnsListPopup(0)
 		Alter Control ExpDlgSTStep2ID Disable
 		Alter Control ExpDlgSTStep3ID Disable
@@ -446,6 +505,10 @@ OnError Goto HandleError
 		Control StaticText Title "A&lias:" Position 3dW, 30.5dH Disable ID LSDlgSTAliasID
 		Control PopupMenu Position 10dW, 30.5dH Width 32dW Disable ID LSDlgPUMAliasID
 		Control Button Title "Re&move Hyperlink" Position 42.5dW, 28.5dH Width 16.5dW Height 3.5dH Disable ID LSDlgBtnRemHLID Calling RemoveHyperLink
+		
+		Control StaticText Title "&Tooltip:" Position 3dW, 33.5dH ID LSDlgSTTTipID
+		Control PopupMenu Title From Variable sColumnsList Value 2 Position 10dW, 33.5dH Width 32dW ID LSDlgPUMTTipID
+
 		Control OKButton Title "&OK" ID LSDlgOKBtnID Calling LSDlgOKBtnHandler
 		Control CancelButton Title "&Cancel"
 		Control Button Title "&Help" Calling AddIn_Help
@@ -480,7 +543,7 @@ OnError Goto HandleError
 	Dialog
 		Title "Style Settings"
 		Control StaticText Title "For Point Data:"
-		Control RadioGroup Title "Use &Icon from File; Use circle&Marker" Value iPointStyleSetting Into iPointStyleSetting
+		Control RadioGroup Title "Use &Icon from File; Use &divIcon" Value iPointStyleSetting Into iPointStyleSetting
 		Control OKButton Title "&OK"
 		Control CancelButton Title "&Cancel"
 		Control Button Title "&Help" Calling AddIn_Help
@@ -503,7 +566,12 @@ Dim i As Integer
 	lAddColumnNames = ReadControlValue(LSDlgCBAddColNmID)
 	lFirstColumnBold = ReadControlValue(LSDlgCBCol1BoldID)
 	sLayerNamePub = ReadControlValue(LSDlgETLNameID)  'Visible for the user in the Leaflet Layers Control
-	sFFeatureCollection = ReplaceSubStringWith(LCase$(sLayerNamePub), Chr$(32), Chr$(95)) 'Used as the GeoJSON var name
+	sFeatureCollection = ReplaceSubStringWith(LCase$(sLayerNamePub), Chr$(32), Chr$(95)) 'Used as the GeoJSON var name
+	If ReadControlValue(LSDlgPUMTTipID) > 1 Then
+		sTooltipCol = sColumnsList(ReadControlValue(LSDlgPUMTTipID))
+	Else
+		sTooltipCol = sColumnsList(2)
+	End If
 
 	ReDim Columns2Export(UBound(sColumnsListPopup))
 
@@ -511,7 +579,11 @@ Dim i As Integer
 		Columns2Export(i).sColName = sColumnsListPopup(i)
 		If sColumnsListPopup(i) = sHyperlink Then
 			Columns2Export(i).lHyperlink = TRUE
-			Columns2Export(i).sAlias = sColumnsList(ReadControlValue(LSDlgPUMAliasID))
+			If ReadControlValue(LSDlgPUMAliasID) > 1 Then
+				Columns2Export(i).sAlias = sColumnsList(ReadControlValue(LSDlgPUMAliasID))
+			Else
+				Columns2Export(i).sAlias = sHyperlink
+			End If
 		Else
 			Columns2Export(i).lHyperlink = FALSE
 			Columns2Export(i).sAlias = ""
@@ -1001,4 +1073,32 @@ Function LooksLikeURL(ByVal sPotentialURL As String) As Logical
 		LooksLikeURL = FALSE
 	End If
 
+End Function
+
+'*********************************************************************************************
+Function LayerIsInMap(ByVal iWindowID As Integer, ByVal sLayerName As String) As Logical
+
+OnError Goto HandleError
+
+Dim iNumLayers, i As Integer
+	
+	LayerIsInMap = False
+
+	If WindowInfo(iWindowID, WIN_INFO_TYPE) = WIN_MAPPER Then
+
+		iNumLayers = MapperInfo(iWindowID, MAPPER_INFO_LAYERS)
+
+		For i = 1 To iNumLayers
+			If sLayerName = LayerInfo(iWindowID, i, LAYER_INFO_NAME) Then
+				LayerIsInMap = True
+				Exit For
+			End If
+		Next
+
+	End If
+
+Exit Function
+'---------------------------
+HandleError:
+  LayerIsInMap = False
 End Function

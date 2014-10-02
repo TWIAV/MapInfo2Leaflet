@@ -3,7 +3,7 @@
 '**  
 '**  
 '**  Author:	Egge-Jan Pollé
-'**  Date:		26 September 2014
+'**  Date:		2 October 2014
 '**  Version:	AppVersion (see below)
 '************************************************************************************
 Include "MAPBASIC.DEF"
@@ -36,6 +36,7 @@ Declare Sub LeafletWebsite
 Declare Sub AddIn_Help
 
 Declare Function IsPointTable(ByVal sTable As String) As Logical
+Declare Function LayerIsInMap(ByVal iWindowID As Integer, ByVal sLayerName As String) As Logical
 
 Declare Function ReplaceSubStringWith(	'E.g. replace underscore ("_" or Chr$(95)) with space (" " or Chr$(32)) 
 	ByVal sString2Modify As String		'String with substring to be replaced, e.g. "a_b_c_d"
@@ -75,9 +76,9 @@ Declare Method RegionalWeekday
     Class "MBExtensions.MBDateAndTime"
     Lib "MBExtensions.dll" (ByVal sDateString as string) As String
 
-Global sTitleWebsite, sHTMLFilePath, sHTMLFilePathTmp, sGeoJSONFilePath, sGeoJSONFilePathTmp, sLayerNamePub, sLayerNameTech, sFFeatureCollection As String
+Global sTitleWebsite, sHTMLFilePath, sHTMLFilePathTmp, sGeoJSONFilePath, sGeoJSONFilePathTmp, sLayerNamePub, sLayerNameTech, sFeatureCollection As String
 Global sTableList(), sColumnsList(), sTable2Export As String
-Global sColumnsListPopup(), sColumnsListNonPopup(), sHyperlink As String
+Global sColumnsListPopup(), sColumnsListNonPopup(), sHyperlink, sTooltipCol, sFitBounds, sDatasetBounds As String
 Global lAddColumnNames, lFirstColumnBold As Logical
 Global iPointStyleSetting As Integer
 
@@ -91,7 +92,7 @@ Global Columns2Export() As tColumn2Export
 
 Define AppName "MapInfo2Leaflet"
 Define AppNameMenu "MapInfo&2Leaflet"
-Define AppVersion "0.20"
+Define AppVersion "0.21"
 
 'Defining Dialog Width and Height
 'This allows you to specify width and height clauses in terms of characters (i.e., Width 30dW, Height 10dH).
@@ -131,4 +132,6 @@ Define LSDlgETHLColID			723
 Define LSDlgSTAliasID			724
 Define LSDlgPUMAliasID			725
 Define LSDlgBtnRemHLID			731
+Define LSDlgSTTTipID			735
+Define LSDlgPUMTTipID			736
 Define LSDlgOKBtnID				741
