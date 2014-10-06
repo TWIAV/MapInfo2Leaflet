@@ -240,6 +240,34 @@ For i = 1 to iNumRows
 
 			Next
 
+		Case OBJ_TYPE_REGION
+
+			sGeoJSONGeomObjType = "Polygon"
+			
+			sCoordinates = ""
+			
+			If ObjectInfo(aObjCol,OBJ_INFO_NPOLYGONS) = 1 Then
+				For k = 1 to ObjectInfo(aObjCol, OBJ_INFO_NPNTS)
+				
+				If k = 1 Then
+					sCoordinates = "[ "
+				End If
+				
+					fX = ObjectNodeX(aObjCol, 1, k)
+					fY = ObjectNodeY(aObjCol, 1, k)
+
+					sCoordinates = sCoordinates + " [" + fX + ", " + fY + "]"
+					
+					If k < ObjectInfo(aObjCol, OBJ_INFO_NPNTS) Then
+						sCoordinates = sCoordinates + ","
+					Else
+						sCoordinates = sCoordinates + " ] "
+					End If
+				Next
+			Else
+				Call ProcessRegion(aObjCol, sGeoJSONGeomObjType, sCoordinates)
+			End If
+
 	End Case
 
 	Print #1, Chr$(9) + Chr$(9) + "{"
@@ -429,7 +457,7 @@ Dim fX1, fY1, fX2, fY2 As Float
 
 	If ReadControlValue(ExpDlgPUMTableID) > 1 Then
 		sTable2Export = sTableList(ReadControlValue(ExpDlgPUMTableID))
-		If NoOfColumns(sTable2Export, sColumnsList) > 1 Then
+		If NoOfColumns(sTable2Export, sColumnsList) > 0 Then
 			Alter Control ExpDlgBtnLaySetID Enable
 			Alter Control ExpDlgSTStep2ID Enable
 			sHTMLFilePath = PathToDirectory$(TableInfo(sTable2Export, TAB_INFO_TABFILE)) + sTable2Export + ".html"
@@ -1041,7 +1069,7 @@ OnError GoTo HandleError
 	
 	If TableInfo("TestTable", TAB_INFO_NROWS) = 1 Then
 		Fetch Rec 1 From TestTable
-		If TestTable.Col1 IN ("Point", "Line", "Polyline") Then
+		If TestTable.Col1 IN ("Point", "Line", "Polyline", "Region") Then
 			IsVectorTable = TRUE
 		Else
 			IsVectorTable = FALSE
@@ -1155,3 +1183,98 @@ Exit Function
 HandleError:
   LayerIsInMap = False
 End Function
+'**************************************************************
+Sub ProcessRegion(ByVal oArea As Object, sGeoJSONGeomObjType As String, sCoordinates As String)
+
+Dim	iNumPol, iNumNodes, i, j As Integer,
+	oSubObjArray(), oCur, oEmptyObj As Object,
+	sSubCoordinatesArray(), sSubCoordinates, sFinalString As String
+
+	sGeoJSONGeomObjType = ""
+	sCoordinates = ""
+	
+	If not ObjectInfo(oArea, OBJ_INFO_TYPE) = OBJ_TYPE_REGION Then
+		Exit Sub
+	End If
+
+	iNumPol = ObjectInfo(oArea,OBJ_INFO_NPOLYGONS)
+
+	If iNumPol = 1 Then
+		Exit Sub
+	End If
+
+	Redim oSubObjArray(iNumPol)
+	Redim sSubCoordinatesArray(iNumPol)
+	
+	For i = 1 To iNumPol
+		sSubCoordinates = ""
+		iNumNodes = ObjectInfo(oArea,OBJ_INFO_NPOLYGONS+i)
+
+		Create Region
+			Into Variable oCur
+			1 1 (CentroidX(oArea),CentroidY(oArea))  'one dummy point (to fool centroid function)
+		For j = 1 To iNumNodes
+			Alter Object oCur
+				Node Add Position 1, j+1 (ObjectNodeX(oArea,i,j),ObjectNodeY(oArea,i,j))
+
+			If j = 1 Then
+				sSubCoordinates = "[ "
+			End If
+
+			sSubCoordinates = sSubCoordinates + " [" + ObjectNodeX(oArea,i,j) + ", " + ObjectNodeY(oArea,i,j) + "]"
+
+			If j < iNumNodes Then
+				sSubCoordinates = sSubCoordinates + ","
+			Else
+				sSubCoordinates = sSubCoordinates + " ]"
+			End If
+
+		Next
+		Alter Object oCur Node Remove Position 1,1  'delete dummy centroid to force MI to recalc it
+
+		oSubObjArray(i) = oCur
+		sSubCoordinatesArray(i) = sSubCoordinates
+		
+	Next
+
+	For i = 1 To Ubound(oSubObjArray)
+		oCur = oSubObjArray(i)
+		For j = 1 To Ubound(oSubObjArray)
+			If i <> j Then
+				If oCur Contains Entire oSubObjArray(j) Then 'hole
+					sSubCoordinatesArray(i) = sSubCoordinatesArray(i) + ", " + sSubCoordinatesArray(j)
+					sSubCoordinatesArray(j) = ""
+					Create Region Into Variable oEmptyObj 0
+					oSubObjArray(j) = oEmptyObj
+					oCur = Erase(oCur, oSubObjArray(j))
+					oSubObjArray(i) = oCur
+				End if
+			End If
+		Next	'j
+	Next	'i
+	j = 0
+	For i = 1 to UBound(sSubCoordinatesArray)
+		If sSubCoordinatesArray(i) <> "" Then
+			j = j + 1
+		End If
+	Next
+	If j = 1 Then
+		For i = 1 to UBound(sSubCoordinatesArray)
+			sFinalString = sFinalString + sSubCoordinatesArray(i)
+		Next
+		sGeoJSONGeomObjType = "Polygon"
+	Else
+		For i = 1 to UBound(sSubCoordinatesArray)
+			If sSubCoordinatesArray(i) <> "" Then
+				sFinalString = sFinalString + "[" + sSubCoordinatesArray(i) + "]"
+				If i < UBound(sSubCoordinatesArray) Then
+					sFinalString = sFinalString + ", "
+				End If
+			End If
+		Next
+		sGeoJSONGeomObjType = "MultiPolygon"
+		
+	End If
+	sCoordinates = sFinalString
+End Sub
+'**********************************************************

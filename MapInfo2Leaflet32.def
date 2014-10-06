@@ -37,6 +37,7 @@ Declare Sub AddIn_Help
 
 Declare Function IsVectorTable(ByVal sTable As String) As Logical
 Declare Function LayerIsInMap(ByVal iWindowID As Integer, ByVal sLayerName As String) As Logical
+Declare Sub ProcessRegion(ByVal oArea As Object, sGeoJSONGeomObjType As String, sCoordinates As String)
 
 Declare Function ReplaceSubStringWith(	'E.g. replace underscore ("_" or Chr$(95)) with space (" " or Chr$(32)) 
 	ByVal sString2Modify As String		'String with substring to be replaced, e.g. "a_b_c_d"
