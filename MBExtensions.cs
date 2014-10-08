@@ -65,6 +65,13 @@ namespace MBExtensions
 			{
 				System.Diagnostics.Process.Start(sOpen);
 			}
+
+		public static void CreateDir(string sDir)
+			{
+				bool exists = System.IO.Directory.Exists(sDir);
+				if(!exists)
+					System.IO.Directory.CreateDirectory(sDir);
+			}
 	}
 	// The MBFileConversion class
 	class MBFileConversion
@@ -74,6 +81,41 @@ namespace MBExtensions
 				string contents = File.ReadAllText(sFileOld, Encoding.Default);
 				File.WriteAllText(sFileNew, contents, Encoding.UTF8);
 			}
+	}
+	// The MBCopyDir class
+	class MBCopyDir
+	{
+		public static void CopyDir(string sSourceDirectory, string sTargetDirectory)
+		{
+			DirectoryInfo diSource = new DirectoryInfo(sSourceDirectory);
+			DirectoryInfo diTarget = new DirectoryInfo(sTargetDirectory);
+
+			CopyAll(diSource, diTarget);
+		}
+
+		public static void CopyAll(DirectoryInfo source, DirectoryInfo target)
+		{
+			// Check if the target directory exists; if not, create it.
+			if (Directory.Exists(target.FullName) == false)
+			{
+				Directory.CreateDirectory(target.FullName);
+			}
+
+			// Copy each file into the new directory.
+			foreach (FileInfo fi in source.GetFiles())
+			{
+				Console.WriteLine(@"Copying {0}\{1}", target.FullName, fi.Name);
+				fi.CopyTo(Path.Combine(target.FullName, fi.Name), true);
+			}
+
+			// Copy each subdirectory using recursion.
+			foreach (DirectoryInfo diSourceSubDir in source.GetDirectories())
+			{
+				DirectoryInfo nextTargetSubDir =
+					target.CreateSubdirectory(diSourceSubDir.Name);
+				CopyAll(diSourceSubDir, nextTargetSubDir);
+			}
+		}
 	}
 	// The MBDateAndTime class
 	class MBDateAndTime

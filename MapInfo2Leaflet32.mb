@@ -104,16 +104,17 @@ Sub CreateHTML
 
 OnError Goto HandleError
 
-Dim i, j, k, iNumRows, iObjectType As Integer
+Dim i, j, k, iNumRows, iObjectType, iGeoJSONLayerType As Integer
 Dim fX, fY As Float
 Dim aColj, aObjCol, aTooltipCol As Alias
 Dim sCenter, sString, sPopUpString, sColumnText, sValue, sCurDate, sStyleValue, sIconValue, sTooltipString,
-	sMapString, sGeoJSONGeomObjType, sCoordinates As String
+	sMapString, sGeoJSONGeomObjType, sCoordinates, sOptionHighLighting As String
 
 	sCurDate = CurDate()
 	sCurDate = RegionalLongDate(sCurDate)
 
 '---------------------------------------
+Call CreateDir(PathToDirectory$(sHTMLFilePath) + "js")
 Open File sGeoJSONFilePathTmp For Output Access Write As #1 CharSet SystemInfo(SYS_INFO_CHARSET)'"WindowsLatin1"
 Open File sHTMLFilePathTmp For Output Access Write As #2 CharSet SystemInfo(SYS_INFO_CHARSET)'"WindowsLatin1"
 OnError Goto HandleErrorDuringFileCreation
@@ -204,6 +205,8 @@ For i = 1 to iNumRows
 			fY = CentroidY(aObjCol)
 			
 			sCoordinates = fX + ", " + fY 'First Longitude (X), then Latitude (Y)
+			
+			iGeoJSONLayerType = GeoJSONPointLayer
 
 		Case OBJ_TYPE_LINE
 
@@ -219,7 +222,9 @@ For i = 1 to iNumRows
 			
 			sCoordinates = sCoordinates + " [" + fX + ", " + fY + "] " 'First Longitude (X), then Latitude (Y)
 
-		Case OBJ_TYPE_PLINE
+			iGeoJSONLayerType = GeoJSONLineStringLayer
+
+			Case OBJ_TYPE_PLINE
 
 			sGeoJSONGeomObjType = "LineString"
 			
@@ -239,6 +244,8 @@ For i = 1 to iNumRows
 				End If
 
 			Next
+
+			iGeoJSONLayerType = GeoJSONLineStringLayer
 
 		Case OBJ_TYPE_REGION
 
@@ -267,6 +274,8 @@ For i = 1 to iNumRows
 			Else
 				Call ProcessRegion(aObjCol, sGeoJSONGeomObjType, sCoordinates)
 			End If
+
+			iGeoJSONLayerType = GeoJSONPolygonLayer
 
 	End Case
 
@@ -303,19 +312,10 @@ Print #2, "<head>"
 Print #2, Chr$(9) + "<title>" + sTitleWebsite + "</title>"
 Print #2, Chr$(9) + "<meta http-equiv=" + Chr$(34) + "Content-Type" + Chr$(34) + " content=" + Chr$(34) + "text/html;charset=UTF-8" + Chr$(34) + ">"
 Print #2, Chr$(9) + "<meta name=" + Chr$(34) + "viewport" + Chr$(34) + " content=" + Chr$(34) + "width=device-width, initial-scale=1.0" + Chr$(34) + ">"
-Print #2, Chr$(9) + "<link rel=" + Chr$(34) + "stylesheet" + Chr$(34) + " href=" + Chr$(34) + "http://cdn.leafletjs.com/leaflet-0.7.3/leaflet.css" + Chr$(34) + " />"
-Print #2, Chr$(9) + "<link rel=" + Chr$(34) + "stylesheet" + Chr$(34) + " href=" + Chr$(34) + "default.css" + Chr$(34) + " />"
-
-If iPointStyleSetting = 2 Then
-	Print #2, Chr$(9) + "<style>"
-	Print #2, Chr$(9) + Chr$(9) + ".miMarker {"
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "background-color: rgba(0,128,0,.9);"
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "border: 3px solid #FF0000;"
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "border-radius: 50%;"
-	Print #2, Chr$(9) + Chr$(9) + "}"	
-	Print #2, Chr$(9) + "</style>"
-End If
-
+Print #2, Chr$(9) + "<link rel=" + Chr$(34) + "stylesheet" + Chr$(34) + " href=" + Chr$(34) + "leaflet-0.7.3/leaflet.css" + Chr$(34) + " />"
+Print #2, Chr$(9) + "<link rel=" + Chr$(34) + "stylesheet" + Chr$(34) + " href=" + Chr$(34) + "leaflet-plugins/leaflet.label.css" + Chr$(34) + " />"
+Print #2, Chr$(9) + "<link rel=" + Chr$(34) + "stylesheet" + Chr$(34) + " href=" + Chr$(34) + "css/page.css" + Chr$(34) + " />"
+Print #2, Chr$(9) + "<link rel=" + Chr$(34) + "stylesheet" + Chr$(34) + " href=" + Chr$(34) + "css/mapinfo.css" + Chr$(34) + " />"
 Print #2, "</head>"
 Print #2, "<body>"
 Print #2, Chr$(9) + "<header>"
@@ -327,9 +327,11 @@ Print #2, Chr$(9) + Chr$(9) + "<br>"
 Print #2, Chr$(9) + Chr$(9) + "<p>Point data exported from MapInfo Professional: " + sTable2Export + ".TAB</p>"
 Print #2, Chr$(9) + Chr$(9) + "<p>Last modified: " + sCurDate + "</p>"
 Print #2, Chr$(9) + "</div>"
-Print #2, Chr$(9) + "<script src=" + Chr$(34) + PathToFileName$(sGeoJSONFilePath) + Chr$(34) + " type=" + Chr$(34) + "text/javascript" + Chr$(34) + "></script>"
-Print #2, Chr$(9) + "<script src=" + Chr$(34) + "http://cdn.leafletjs.com/leaflet-0.7.3/leaflet.js" + Chr$(34) + "></script>"
+Print #2, Chr$(9) + "<script src=" + Chr$(34) + "js/" + PathToFileName$(sGeoJSONFilePath) + Chr$(34) + " type=" + Chr$(34) + "text/javascript" + Chr$(34) + "></script>"
+Print #2, Chr$(9) + "<script src=" + Chr$(34) + "leaflet-0.7.3/leaflet.js" + Chr$(34) + "></script>"
+Print #2, Chr$(9) + "<script src=" + Chr$(34) + "leaflet-plugins/leaflet.label.js" + Chr$(34) + "></script>"
 Print #2, Chr$(9) + "<script>"
+sLayerNameTech = sFeatureCollection + "Layer"
 Print #2, sDatasetBounds
 Print #2
 
@@ -351,44 +353,133 @@ Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "osmUrl='http://{s}.tile.openstreetmap.o
 Print #2
 Print #2, Chr$(9) + Chr$(9) + "var osm = L.tileLayer(osmUrl, {attribution: osmAttrib, minZoom: mz}).addTo(map);"
 Print #2
+
+If lZoomInOnClick Then
+	Do Case iGeoJSONLayerType
+
+		Case GeoJSONPointLayer
+
+			Print #2, Chr$(9) + Chr$(9) + "// When user clicks on a marker, the popup opens and the map will zoom in to this particular marker"
+			Print #2, Chr$(9) + Chr$(9) + "map.on('popupopen', function(centerMarker) {"
+			Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "var cM = map.project(centerMarker.popup._latlng);"
+			Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "map.setView(map.unproject(cM),16, {animate: true});"
+			Print #2, Chr$(9) + Chr$(9) + "});"
+			Print #2
+
+		Case GeoJSONLineStringLayer, GeoJSONPolygonLayer
+
+			Print #2, Chr$(9) + Chr$(9) + "function zoomToFeature(e) {"
+			Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "map.fitBounds(e.target.getBounds(), {padding:[25,25]});"
+			Print #2, Chr$(9) + Chr$(9) +  "}"
+			Print #2
+
+	End Case
+End If
+
+'Styling
+Do Case iGeoJSONLayerType
+
+	Case GeoJSONPointLayer
+
+		If iPointStyleSetting = 1 Then
+
+			Print #2,  Chr$(9) + Chr$(9) + "var blueArrowIcon = L.icon({"
+			Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "iconUrl: 'blue-arrow.png',"
+			Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "iconSize: [32, 37],"
+			Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "iconAnchor: [16, 37],"
+			Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "popupAnchor: [0, -28]"
+			Print #2,  Chr$(9) + Chr$(9) + "});"
+			
+			Save File ApplicationDirectory$() + "blue-arrow.png" As PathToDirectory$(sHTMLFilePath) + "blue-arrow.png"
+			
+			sIconValue = "blueArrowIcon"
+
+		ElseIf iPointStyleSetting = 2 Then
+
+			Print #2, Chr$(9) + Chr$(9) + "var miIcon = L.divIcon({className: 'miMarker'});"
+
+			sIconValue = "miIcon"
+			
+		End If
+
+		sStyleValue = Chr$(9) + Chr$(9) + Chr$(9) + "pointToLayer: function (feature, latlng) {" + Chr$(10)
+		sStyleValue = sStyleValue + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "return L.marker(latlng, {icon: " + sIconValue + "});" + Chr$(10)
+		sStyleValue = sStyleValue + Chr$(9) + Chr$(9) + Chr$(9) + "}"
+		
+		sOptionHighLighting = ""
+
+	Case GeoJSONLineStringLayer, GeoJSONPolygonLayer
+
+		Print #2,  Chr$(9) + Chr$(9) + "function style(feature) {"
+		Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + "return {"
+		Do Case iGeoJSONLayerType
+			Case GeoJSONLineStringLayer
+				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "weight: 5,"
+				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "color: '#ff0000'"
+			Case GeoJSONPolygonLayer
+				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "weight: 2,"
+				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "opacity: 1,"
+				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "color: '#ff0000',"
+				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "fillOpacity: 0.05,"
+				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "fillColor: '#ff0000'"
+		End Case
+		Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + "};"
+		Print #2,  Chr$(9) + Chr$(9) + "}"
+		Print #2
+		Print #2,  Chr$(9) + Chr$(9) + "function highlightFeature(e) {"
+		Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + "var layer = e.target;"
+		Print #2
+		Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + "layer.setStyle({"
+		Do Case iGeoJSONLayerType
+			Case GeoJSONLineStringLayer
+				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "weight: 12"
+			Case GeoJSONPolygonLayer
+				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "weight: 5,"
+				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "fillOpacity: 0.5"
+		End Case
+		Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + "});"
+		Print #2
+		Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + "if (!L.Browser.ie && !L.Browser.opera) {"
+		Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "layer.bringToFront();"
+		Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + "}"
+		Print #2
+		Print #2,  Chr$(9) + Chr$(9) + "}"
+		Print #2
+		Print #2,  Chr$(9) + Chr$(9) + "function resetHighlight(e) {"
+		Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + sLayerNameTech + ".resetStyle(e.target);"
+		Print #2,  Chr$(9) + Chr$(9) + "}"
+
+		sStyleValue = "style: style"
+
+		sOptionHighLighting = Chr$(10) + Chr$(9) + Chr$(9) + Chr$(9) + "layer.on({" + Chr$(10)
+		sOptionHighLighting = sOptionHighLighting + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "mouseover: highlightFeature," + Chr$(10)
+		sOptionHighLighting = sOptionHighLighting + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "mouseout: resetHighlight" + Chr$(10)
+		sOptionHighLighting = sOptionHighLighting + Chr$(9) + Chr$(9) + Chr$(9) + "});"
+
+End Case
+
+Print #2
 Print #2, Chr$(9) + Chr$(9) + "function onEachFeature(feature, layer) {"
 Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "if (feature.properties && feature.properties.popupContent) {"
 Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "layer.bindPopup(feature.properties.popupContent);"
 Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "}"
+Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "if (feature.properties && feature.properties.tooltipContent) {"
+Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "layer.bindLabel(feature.properties.tooltipContent);"
+Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "}" + sOptionHighLighting
+
+If lZoomInOnClick And iGeoJSONLayerType IN (GeoJSONLineStringLayer, GeoJSONPolygonLayer) Then
+
+	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "// When user clicks on a feature the map will zoom in to this particular feature"
+	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "layer.on({"
+	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "click: zoomToFeature"
+	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "});"
+
+End If
+
 Print #2, Chr$(9) + Chr$(9) + "}"
 Print #2
-
-Do Case iPointStyleSetting
-
-	Case 1
-
-		Print #2,  Chr$(9) + Chr$(9) + "var blueArrowIcon = L.icon({"
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "iconUrl: 'blue-arrow.png',"
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "iconSize: [32, 37],"
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "iconAnchor: [16, 37],"
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "popupAnchor: [0, -28]"
-		Print #2,  Chr$(9) + Chr$(9) + "});"
-
-		Save File ApplicationDirectory$() + "blue-arrow.png" As PathToDirectory$(sHTMLFilePath) + "blue-arrow.png"
-
-		sIconValue = "blueArrowIcon"
-
-	Case 2
-
-		Print #2, Chr$(9) + Chr$(9) + "var miIcon = L.divIcon({className: 'miMarker'});"
-
-		sIconValue = "miIcon"
-	
-End Case
-
-sStyleValue = "L.marker(latlng, {icon: " + sIconValue + ", title: feature.properties.tooltipContent});"
-
-Print #2
-sLayerNameTech = sFeatureCollection + "Layer"
 Print #2, Chr$(9) + Chr$(9) + "var " + sLayerNameTech + " = L.geoJson(" + sFeatureCollection + ", {"
-Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "pointToLayer: function (feature, latlng) {"
-Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "return " + sStyleValue
-Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "},"
+Print #2, sStyleValue + ","
 Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "onEachFeature: onEachFeature"
 Print #2, Chr$(9) + Chr$(9) + "}).addTo(map);"
 Print #2
@@ -410,14 +501,32 @@ Close File #2
 
 OnError Goto HandleError
 
-Save File ApplicationDirectory$() + "default.css" As PathToDirectory$(sHTMLFilePath) + "default.css"
+'Dim sLeafletSourceDir, sLeafletDestDir As String
+
+'Copy leaflet-0.7.3
+'sLeafletSourceDir = ApplicationDirectory$() + "leaflet-0.7.3"
+'sLeafletDestDir = PathToDirectory$(sHTMLFilePath) + "leaflet-0.7.3"
+
+'Copy leaflet-0.7.3
+Call CopyDir(ApplicationDirectory$() + "leaflet-0.7.3", PathToDirectory$(sHTMLFilePath) + "leaflet-0.7.3")
+
+'Copy leaflet-plugins
+Call CopyDir(ApplicationDirectory$() + "leaflet-plugins", PathToDirectory$(sHTMLFilePath) + "leaflet-plugins")
+
+'Copy local css dir
+Call CopyDir(ApplicationDirectory$() + "css", PathToDirectory$(sHTMLFilePath) + "css")
+
+
+'Save File ApplicationDirectory$() + "css\page.css" As PathToDirectory$(sHTMLFilePath) + "page.css"
+'Save File ApplicationDirectory$() + "css\mapinfo.css" As PathToDirectory$(sHTMLFilePath) + "mapinfo.css"
 
 ' Convert the ANSI files to UTF-8
 Call ConvertFileANSItoUTF8(sHTMLFilePathTmp, sHTMLFilePath)
 If FileExists(sHTMLFilePathTmp) Then
 	Kill sHTMLFilePathTmp 	
 End If
-
+Print sGeoJSONFilePathTmp
+Print sGeoJSONFilePath
 Call ConvertFileANSItoUTF8(sGeoJSONFilePathTmp, sGeoJSONFilePath)
 If FileExists(sGeoJSONFilePathTmp) Then
 	Kill sGeoJSONFilePathTmp 	
@@ -462,8 +571,8 @@ Dim fX1, fY1, fX2, fY2 As Float
 			Alter Control ExpDlgSTStep2ID Enable
 			sHTMLFilePath = PathToDirectory$(TableInfo(sTable2Export, TAB_INFO_TABFILE)) + sTable2Export + ".html"
 			sHTMLFilePathTmp = PathToDirectory$(TableInfo(sTable2Export, TAB_INFO_TABFILE)) + sTable2Export + "_tmp.html"
-			sGeoJSONFilePath = PathToDirectory$(TableInfo(sTable2Export, TAB_INFO_TABFILE)) + sTable2Export + ".js"
-			sGeoJSONFilePathTmp = PathToDirectory$(TableInfo(sTable2Export, TAB_INFO_TABFILE)) + sTable2Export + "_tmp.js"
+			sGeoJSONFilePath = PathToDirectory$(TableInfo(sTable2Export, TAB_INFO_TABFILE)) + "js\" + sTable2Export + ".js"
+			sGeoJSONFilePathTmp = PathToDirectory$(TableInfo(sTable2Export, TAB_INFO_TABFILE)) + "js\" + sTable2Export + "_tmp.js"
 			Alter Control ExpDlgETHTMLFilePathID Value sHTMLFilePath
 			sTitleWebsite = ReplaceSubStringWith(sTable2Export, Chr$(95), Chr$(32))
 			Alter Control ExpDlgETTitleWebPageID Value sTitleWebsite
@@ -543,10 +652,14 @@ Sub ExpDlgOKBtnHandler
 
 OnError Goto HandleError
 
+Dim sHTMLDirectory, sHTMLFile As String
+
 		sHTMLFilePath = ReadControlValue(ExpDlgETHTMLFilePathID)
 		sHTMLFilePathTmp = Left$(sHTMLFilePath, Len(sHTMLFilePath) - 5) + "_tmp.html"
-		sGeoJSONFilePath = Left$(sHTMLFilePath, Len(sHTMLFilePath) - 5) + ".js"
-		sGeoJSONFilePathTmp = Left$(sHTMLFilePath, Len(sHTMLFilePath) - 5) + "_tmp.js"
+		sHTMLDirectory = PathToDirectory$(sHTMLFilePath)
+		sHTMLFile = PathToFileName$(sHTMLFilePath)
+		sGeoJSONFilePath = sHTMLDirectory + "js\" + Left$(sHTMLFile, Len(sHTMLFile) - 5) + ".js"
+		sGeoJSONFilePathTmp = sHTMLDirectory + "js\" + Left$(sHTMLFile, Len(sHTMLFile) - 5) + "_tmp.js"
 		sTitleWebsite = ReadControlValue(ExpDlgETTitleWebPageID)
 
 Exit Sub
@@ -586,7 +699,9 @@ OnError Goto HandleError
 		Control StaticText Title "A&lias:" Position 3dW, 30.5dH Disable ID LSDlgSTAliasID
 		Control PopupMenu Position 10dW, 30.5dH Width 32dW Disable ID LSDlgPUMAliasID
 		Control Button Title "Re&move Hyperlink" Position 42.5dW, 28.5dH Width 16.5dW Height 3.5dH Disable ID LSDlgBtnRemHLID Calling RemoveHyperLink
-		
+
+		Control CheckBox Title "&Zoom in to marker/feature on click" Value lZoomInOnClick Position 61dW, 28.5dH ID LSDlgCBZmClckID
+
 		Control StaticText Title "&Tooltip:" Position 3dW, 33.5dH ID LSDlgSTTTipID
 		Control PopupMenu Title From Variable sColumnsList Value 2 Position 10dW, 33.5dH Width 32dW ID LSDlgPUMTTipID
 
@@ -646,6 +761,7 @@ Dim i As Integer
 
 	lAddColumnNames = ReadControlValue(LSDlgCBAddColNmID)
 	lFirstColumnBold = ReadControlValue(LSDlgCBCol1BoldID)
+	lZoomInOnClick = ReadControlValue(LSDlgCBZmClckID)
 	sLayerNamePub = ReadControlValue(LSDlgETLNameID)  'Visible for the user in the Leaflet Layers Control
 	sFeatureCollection = ReplaceSubStringWith(LCase$(sLayerNamePub), Chr$(32), Chr$(95)) 'Used as the GeoJSON var name
 	If ReadControlValue(LSDlgPUMTTipID) > 1 Then

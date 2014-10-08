@@ -29,6 +29,7 @@ Declare Sub ModifyColumnsListPopup (ByVal iOperation As Integer)
 Declare Sub LSDlgOKBtnHandler
 Declare Sub SetHTMLFilePath
 Declare Sub GetVectorTables
+Declare Sub ProcessRegion(ByVal oArea As Object, sGeoJSONGeomObjType As String, sCoordinates As String)
 
 Declare Sub About
 Declare Sub Bye
@@ -37,7 +38,6 @@ Declare Sub AddIn_Help
 
 Declare Function IsVectorTable(ByVal sTable As String) As Logical
 Declare Function LayerIsInMap(ByVal iWindowID As Integer, ByVal sLayerName As String) As Logical
-Declare Sub ProcessRegion(ByVal oArea As Object, sGeoJSONGeomObjType As String, sCoordinates As String)
 
 Declare Function ReplaceSubStringWith(	'E.g. replace underscore ("_" or Chr$(95)) with space (" " or Chr$(32)) 
 	ByVal sString2Modify As String		'String with substring to be replaced, e.g. "a_b_c_d"
@@ -48,6 +48,8 @@ Declare Function ReplaceSubStringWith(	'E.g. replace underscore ("_" or Chr$(95)
 Declare Function NoOfColumns(ByVal sTab As String, sColumnsList() As String) As Integer
 Declare Function LooksLikeURL(ByVal sPotentialURL As String) As Logical
 
+Declare Method CreateDir Class "MBExtensions.MBFileManagement" Lib "MBExtensions.dll" (ByVal sDir As String)
+Declare Method CopyDir Class "MBExtensions.MBCopyDir" Lib "MBExtensions.dll" (ByVal sSourceDirectory As String, ByVal sTargetDirectory As String)
 Declare Method ConvertFileANSItoUTF8 Class "MBExtensions.MBFileConversion" Lib "MBExtensions.dll" (ByVal sFileOld As String, ByVal sFileNew As String)
 Declare Method NoteAgain Class "MBExtensions.MBDialogs" Lib "MBExtensions.dll" (ByVal sNotification As String, ByVal sCaption As String)
 Declare Method AskAgain Class "MBExtensions.MBDialogs" Lib "MBExtensions.dll" (ByVal sQuestion As String, ByVal sCaption As String) As Logical
@@ -80,7 +82,7 @@ Declare Method RegionalWeekday
 Global sTitleWebsite, sHTMLFilePath, sHTMLFilePathTmp, sGeoJSONFilePath, sGeoJSONFilePathTmp, sLayerNamePub, sLayerNameTech, sFeatureCollection As String
 Global sTableList(), sColumnsList(), sTable2Export As String
 Global sColumnsListPopup(), sColumnsListNonPopup(), sHyperlink, sTooltipCol, sFitBounds, sDatasetBounds As String
-Global lAddColumnNames, lFirstColumnBold As Logical
+Global lAddColumnNames, lFirstColumnBold, lZoomInOnClick As Logical
 Global iPointStyleSetting As Integer
 
 Type tColumn2Export
@@ -99,6 +101,10 @@ Define AppVersion "0.21"
 'This allows you to specify width and height clauses in terms of characters (i.e., Width 30dW, Height 10dH).
 Define dW *4	'Four dialog units equals one character in width
 Define dH *8	'Eight dialog units equals one character in height
+
+Define GeoJSONPointLayer			1601 'For Point & MultiPoint
+Define GeoJSONLineStringLayer		1602 'For LineString & MultiLineString
+Define GeoJSONPolygonLayer			1603 'For Polygon & MultiPolygon
 
 'Control IDs in Export Dialog
 Define ExpDlgPUMTableID				601
@@ -133,6 +139,7 @@ Define LSDlgETHLColID			723
 Define LSDlgSTAliasID			724
 Define LSDlgPUMAliasID			725
 Define LSDlgBtnRemHLID			731
+Define LSDlgCBZmClckID			732
 Define LSDlgSTTTipID			735
 Define LSDlgPUMTTipID			736
 Define LSDlgOKBtnID				741

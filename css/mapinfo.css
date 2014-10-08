@@ -1,0 +1,14 @@
+#map {
+	width: 800px; 
+	height: 400px; 
+	border: 2px solid #CCCCCC;
+	margin-top: 25px;
+}
+.miMarker {
+	background-color: rgba(0,128,0,.9);
+	border: 3px solid #FF0000;
+	border-radius: 50%;
+}
+.miPolygon {
+	color: 'red';
+}
