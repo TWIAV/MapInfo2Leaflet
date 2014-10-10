@@ -3,7 +3,7 @@
 '**  
 '**  
 '**  Author:	Egge-Jan Pollé
-'**  Date:		2 October 2014
+'**  Date:		10 October 2014
 '**  Version:	AppVersion (see below)
 '************************************************************************************
 Include "MAPBASIC.DEF"
@@ -29,14 +29,15 @@ Declare Sub ModifyColumnsListPopup (ByVal iOperation As Integer)
 Declare Sub LSDlgOKBtnHandler
 Declare Sub SetHTMLFilePath
 Declare Sub GetVectorTables
-Declare Sub ProcessRegion(ByVal oArea As Object, sGeoJSONGeomObjType As String, sCoordinates As String)
+Declare Sub ProcessRegion(ByVal oRegion As Object, sGeoJSONGeomObjType As String, sCoordinates As String)
+Declare Sub ProcessPline(ByVal oPline As Object, sGeoJSONGeomObjType As String, sCoordinates As String)
 
 Declare Sub About
 Declare Sub Bye
 Declare Sub LeafletWebsite
 Declare Sub AddIn_Help
 
-Declare Function IsVectorTable(ByVal sTable As String) As Logical
+Declare Function IsPointLineOrPolygonTable(ByVal sTable As String) As Logical
 Declare Function LayerIsInMap(ByVal iWindowID As Integer, ByVal sLayerName As String) As Logical
 
 Declare Function ReplaceSubStringWith(	'E.g. replace underscore ("_" or Chr$(95)) with space (" " or Chr$(32)) 
@@ -92,6 +93,16 @@ Type tColumn2Export
 End Type
 
 Global Columns2Export() As tColumn2Export
+
+Type tString2Replace
+	sReplaceSubString As String
+	sReplaceWith As String
+End Type
+
+Declare Function ReplaceMultipleSubStrings(	'Function similar to the function ReplaceSubStringWith above
+	ByVal sString2Modify As String			'but now you can pass an array with multiple values to replace
+	, Strings2Replace() As tString2Replace
+	) As String
 
 Define AppName "MapInfo2Leaflet"
 Define AppNameMenu "MapInfo&2Leaflet"

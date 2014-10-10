@@ -1,0 +1,63 @@
+'These arrays can be used in the function ReplaceMultipleSubStrings
+'They are not complete yet, but can be extended over time
+Dim tHTMLCharacters(2), tAccentuatedCharacters(23) As tString2Replace
+
+tHTMLCharacters(1).sReplaceSubString = Chr$(39) 'single quote/apostrophe (') to be replaced with the code &#39;
+tHTMLCharacters(1).sReplaceWith = "&#39"
+tHTMLCharacters(2).sReplaceSubString = Chr$(34) 'double quote (") to be replaced with the code &quot;
+tHTMLCharacters(2).sReplaceWith = "&quot;"
+
+'e
+tAccentuatedCharacters(1).sReplaceSubString = "é"
+tAccentuatedCharacters(1).sReplaceWith = "e"
+tAccentuatedCharacters(2).sReplaceSubString = "è"
+tAccentuatedCharacters(2).sReplaceWith = "e"
+tAccentuatedCharacters(3).sReplaceSubString = "ê"
+tAccentuatedCharacters(3).sReplaceWith = "e"
+tAccentuatedCharacters(4).sReplaceSubString = "ë"
+tAccentuatedCharacters(4).sReplaceWith = "e"
+'a
+tAccentuatedCharacters(5).sReplaceSubString = "á"
+tAccentuatedCharacters(5).sReplaceWith = "a"
+tAccentuatedCharacters(6).sReplaceSubString = "à"
+tAccentuatedCharacters(6).sReplaceWith = "a"
+tAccentuatedCharacters(7).sReplaceSubString = "â"
+tAccentuatedCharacters(7).sReplaceWith = "a"
+tAccentuatedCharacters(8).sReplaceSubString = "ä"
+tAccentuatedCharacters(8).sReplaceWith = "a"
+tAccentuatedCharacters(9).sReplaceSubString = "å"
+tAccentuatedCharacters(9).sReplaceWith = "a"
+'o
+tAccentuatedCharacters(10).sReplaceSubString = "ó"
+tAccentuatedCharacters(10).sReplaceWith = "o"
+tAccentuatedCharacters(11).sReplaceSubString = "ò"
+tAccentuatedCharacters(11).sReplaceWith = "o"
+tAccentuatedCharacters(12).sReplaceSubString = "ô"
+tAccentuatedCharacters(12).sReplaceWith = "o"
+tAccentuatedCharacters(13).sReplaceSubString = "ö"
+tAccentuatedCharacters(13).sReplaceWith = "o"
+'i
+tAccentuatedCharacters(14).sReplaceSubString = "í"
+tAccentuatedCharacters(14).sReplaceWith = "i"
+tAccentuatedCharacters(15).sReplaceSubString = "ì"
+tAccentuatedCharacters(15).sReplaceWith = "i"
+tAccentuatedCharacters(16).sReplaceSubString = "î"
+tAccentuatedCharacters(16).sReplaceWith = "i"
+tAccentuatedCharacters(17).sReplaceSubString = "ï"
+tAccentuatedCharacters(17).sReplaceWith = "i"
+'u
+tAccentuatedCharacters(18).sReplaceSubString = "ú"
+tAccentuatedCharacters(18).sReplaceWith = "u"
+tAccentuatedCharacters(19).sReplaceSubString = "ù"
+tAccentuatedCharacters(19).sReplaceWith = "u"
+tAccentuatedCharacters(20).sReplaceSubString = "û"
+tAccentuatedCharacters(20).sReplaceWith = "u"
+tAccentuatedCharacters(21).sReplaceSubString = "ü"
+tAccentuatedCharacters(21).sReplaceWith = "u"
+'c
+tAccentuatedCharacters(22).sReplaceSubString = "ç"
+tAccentuatedCharacters(22).sReplaceWith = "c"
+'n
+tAccentuatedCharacters(23).sReplaceSubString = "ñ"
+tAccentuatedCharacters(23).sReplaceWith = "n"
+

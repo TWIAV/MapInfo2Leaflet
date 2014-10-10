@@ -3,7 +3,7 @@
 '**  
 '**  
 '**  Author:	Egge-Jan Pollé
-'**  Date:		2 October 2014
+'**  Date:		10 October 2014
 '************************************************************************************
 Include "MapInfo2Leaflet32.def"
 
@@ -15,7 +15,7 @@ OnError Goto HandleError
 
 	Create Menu AppNameMenu As
 		AppNameMenu
-		HelpMsg "Export a MapInfo Table to a Web Page using Leaflet (this version: point data only)."
+		HelpMsg "Export a MapInfo Table to a Web Page using Leaflet."
 		Calling ExportDialog,
 		"(-",
 		"&About " + AppName
@@ -30,11 +30,11 @@ OnError Goto HandleError
 	Create ButtonPad AppName As
 		PushButton
 			Icon 8001 File "MIPro2LFLTIcons.dll"
-			HelpMsg "Export a MapInfo Table to a Web Page using Leaflet (this version: point data only).\n" + AppName
+			HelpMsg "Export a MapInfo Table to a Web Page using Leaflet.\n" + AppName
 			Calling ExportDialog
 		Show
 		Fixed
-		
+
 Exit Sub
 '---------------------------
 HandleError:
@@ -58,7 +58,7 @@ OnError Goto HandleError
 	Call GetVectorTables
 
 	Dialog
-		Title "Export a MapInfo Table to a Web Page using Leaflet (this version: point data only)"
+		Title "Export a MapInfo Table to a Web Page using Leaflet"
 		Control StaticText Title "Select &Table to Export:" Position 3dW, 1dH
 		Control PopUpMenu Title From Variable sTableList Value 1 Position 3dW, 2.5dH Width 45dW ID ExpDlgPUMTableID Calling EnableLayerSelection
 	
@@ -104,11 +104,14 @@ Sub CreateHTML
 
 OnError Goto HandleError
 
-Dim i, j, k, iNumRows, iObjectType, iGeoJSONLayerType As Integer
+Dim i, j, k, m, iNumRows, iObjectType, iGeoJSONLayerType As Integer
 Dim fX, fY As Float
-Dim aColj, aObjCol, aTooltipCol As Alias
-Dim sCenter, sString, sPopUpString, sColumnText, sValue, sCurDate, sStyleValue, sIconValue, sTooltipString,
-	sMapString, sGeoJSONGeomObjType, sCoordinates, sOptionHighLighting As String
+Dim aColj, aObjCol As Alias
+Dim sString, sPopUpString, sColumnText, sValue, sCurDate, sStyleValue, sIconValue,
+	sGeoJSONGeomObjType, sCoordinates, sOptionHighLighting, sFeatureString As String
+Dim oTmpObject As Object
+
+Include "ReplacementStrings.mb"
 
 	sCurDate = CurDate()
 	sCurDate = RegionalLongDate(sCurDate)
@@ -133,20 +136,19 @@ OnError Goto HandleErrorDuringFileCreation
 '--------------------------------------------------------------------------
 ' Populate the GeoJSON/Javascript file first with a FeatureCollection
 '--------------------------------------------------------------------------
-Print #1, "//Point data exported from MapInfo Professional: " + sTable2Export + ".TAB"
-Print #1, "//Last modified: " + sCurDate
-Print #1, "var " + sFeatureCollection + " = {"
-Print #1, Chr$(9) + Chr$(34) + "type" + Chr$(34) + ": " + Chr$(34) + "FeatureCollection" + Chr$(34) + ","
-Print #1, Chr$(9) + Chr$(34) + "features" + Chr$(34) + ": ["
+Print #1, "//Data exported from MapInfo Professional (using the MapBasic application " + AppName + "): " + sTable2Export + ".TAB"
+Print #1, "//Date: " + sCurDate
+Print #1, "var " + sFeatureCollection + " = {" + Chr$(34) + "type" + Chr$(34) + ":" + Chr$(34) + "FeatureCollection" + Chr$(34) + "," + Chr$(34) + "features" + Chr$(34) + ": ["
 
 iNumRows = TableInfo(sTable2Export, TAB_INFO_NROWS)
 
+Dim sPropertiesString As String
+
 For i = 1 to iNumRows
 	Fetch Rec i From sTable2Export
+	sPropertiesString = ""
 	sPopUpString = ""
-	sTooltipString = ""
-	aTooltipCol = sTable2Export + "." + sTooltipCol
-	sTooltipString = aTooltipCol
+	sTooltipCol = LCase$(ReplaceMultipleSubStrings(sTooltipCol, tAccentuatedCharacters))
 	For j = 1 to UBound(Columns2Export)
 		sColumnText = ""
 		aColj = sTable2Export + "." + Columns2Export(j).sColName
@@ -154,11 +156,26 @@ For i = 1 to iNumRows
 		If sValue = "" Then
 			Goto NextLabel
 		End If
+
+		sPropertiesString = sPropertiesString + Chr$(34) + LCase$(ReplaceMultipleSubStrings(Columns2Export(j).sColName, tAccentuatedCharacters)) + Chr$(34) +":"
+		
+		Do Case ColumnInfo(sTable2Export, Columns2Export(j).sColName, COL_INFO_TYPE)
+
+			Case COL_TYPE_DECIMAL, COL_TYPE_FLOAT, COL_TYPE_INTEGER, COL_TYPE_SMALLINT
+				sPropertiesString = sPropertiesString + sValue + ","
+			Case COL_TYPE_LOGICAL
+				If sValue = "T" Then
+					sPropertiesString = sPropertiesString + "true,"
+				Else
+					sPropertiesString = sPropertiesString + "false,"
+				End If
+			Case Else
+				sPropertiesString = sPropertiesString + Chr$(34) + sValue + Chr$(34) + ","
+
+		End Case
+
 		If ColumnInfo(sTable2Export, Columns2Export(j).sColName, COL_INFO_TYPE) = COL_TYPE_CHAR Then
-			'Any single quote/apostrophe (') in text values should be replaced with the code &#39;
-			sValue = ReplaceSubStringWith(sValue, Chr$(39), "&#39")
-			'Any double quote (") in text values should be replaced with the code &quot;
-			sValue = ReplaceSubStringWith(sValue, Chr$(34), "&quot;")
+			sValue = ReplaceMultipleSubStrings(sValue, tHTMLCharacters)
 		End If
 		If lAddColumnNames Then
 			sColumnText = ReplaceSubStringWith(Columns2Export(j).sColName, Chr$(95), Chr$(32)) + ": "
@@ -168,10 +185,7 @@ For i = 1 to iNumRows
 			aColj = sTable2Export + "." + Columns2Export(j).sAlias
 			sValue = aColj
 			If ColumnInfo(sTable2Export, Columns2Export(j).sAlias, COL_INFO_TYPE) = COL_TYPE_CHAR Then
-				'Any single quote/apostrophe (') in text values should be replaced with the code &#39;
-				sValue = ReplaceSubStringWith(sValue, Chr$(39), "&#39") 
-				'Any double quote (") in text values should be replaced with the code &quot;
-				sValue = ReplaceSubStringWith(sValue, Chr$(34), "&quot;")
+				sValue = ReplaceMultipleSubStrings(sValue, tHTMLCharacters)
 			End If
 			sColumnText = sColumnText + sValue + "<" + Chr$(92) + "/a>"
 		Else
@@ -192,6 +206,9 @@ For i = 1 to iNumRows
 
 	iObjectType = ObjectInfo(aObjCol, OBJ_INFO_TYPE)
 
+	sGeoJSONGeomObjType = ""
+	sCoordinates = ""
+
 	Do Case iObjectType
 		'From the GeoJSON Format Specification, on the "coordinates" member of a geometry object:
 		'The order of elements must follow x, y, z order (easting, northing, altitude for coordinates in a projected coordinate
@@ -200,108 +217,71 @@ For i = 1 to iNumRows
 		Case OBJ_TYPE_POINT
 
 			sGeoJSONGeomObjType = "Point"
-			
-			fX = CentroidX(aObjCol)
-			fY = CentroidY(aObjCol)
-			
-			sCoordinates = fX + ", " + fY 'First Longitude (X), then Latitude (Y)
+
+			sCoordinates = CentroidX(aObjCol) + ", " + CentroidY(aObjCol) 'First Longitude (X), then Latitude (Y)
 			
 			iGeoJSONLayerType = GeoJSONPointLayer
 
-		Case OBJ_TYPE_LINE
+		Case 11 'MultiPoint
 
-			sGeoJSONGeomObjType = "LineString"
-			
-			fX = ObjectGeography(aObjCol, OBJ_GEO_LINEBEGX) 'Starting point
-			fY = ObjectGeography(aObjCol, OBJ_GEO_LINEBEGY)
-			
-			sCoordinates = " [" + fX + ", " + fY + "]," 'First Longitude (X), then Latitude (Y)
+			sGeoJSONGeomObjType = "MultiPoint"
 
-			fX = ObjectGeography(aObjCol, OBJ_GEO_LINEENDX) 'End point
-			fY = ObjectGeography(aObjCol, OBJ_GEO_LINEENDY)
-			
-			sCoordinates = sCoordinates + " [" + fX + ", " + fY + "] " 'First Longitude (X), then Latitude (Y)
-
-			iGeoJSONLayerType = GeoJSONLineStringLayer
-
-			Case OBJ_TYPE_PLINE
-
-			sGeoJSONGeomObjType = "LineString"
-			
-			sCoordinates = ""
-			
-			For k = 1 to ObjectInfo(aObjCol, OBJ_INFO_NPNTS)
-			
-				fX = ObjectNodeX(aObjCol, 1, k)
-				fY = ObjectNodeY(aObjCol, 1, k)
-
-				sCoordinates = sCoordinates + " [" + fX + ", " + fY + "]"
-				
-				If k < ObjectInfo(aObjCol, OBJ_INFO_NPNTS) Then
-					sCoordinates = sCoordinates + ","
-				Else
-					sCoordinates = sCoordinates + " "
+			For m = 1 to ObjectInfo(aObjCol, OBJ_INFO_NPNTS)
+				sCoordinates = sCoordinates + "[" + ObjectNodeX(aObjCol, 1000, m) + ", " + ObjectNodeY(aObjCol, 1000, m) + "]"
+				If m < ObjectInfo(aObjCol, OBJ_INFO_NPNTS) Then
+					sCoordinates = sCoordinates + ", "
 				End If
-
 			Next
 
+			iGeoJSONLayerType = GeoJSONPointLayer
+
+		Case OBJ_TYPE_PLINE
+			
+			Call ProcessPline(aObjCol, sGeoJSONGeomObjType, sCoordinates)
+
 			iGeoJSONLayerType = GeoJSONLineStringLayer
 
-		Case OBJ_TYPE_REGION
+		Case OBJ_TYPE_LINE, 'What more is a line than a polyline with just one segment? :-)
+			OBJ_TYPE_ARC 'GeoJSON does not support arcs
 
-			sGeoJSONGeomObjType = "Polygon"
+			oTmpObject = ConvertToPline(aObjCol)
 			
-			sCoordinates = ""
-			
-			If ObjectInfo(aObjCol,OBJ_INFO_NPOLYGONS) = 1 Then
-				For k = 1 to ObjectInfo(aObjCol, OBJ_INFO_NPNTS)
-				
-				If k = 1 Then
-					sCoordinates = "[ "
-				End If
-				
-					fX = ObjectNodeX(aObjCol, 1, k)
-					fY = ObjectNodeY(aObjCol, 1, k)
+			Call ProcessPline(oTmpObject, sGeoJSONGeomObjType, sCoordinates)
 
-					sCoordinates = sCoordinates + " [" + fX + ", " + fY + "]"
-					
-					If k < ObjectInfo(aObjCol, OBJ_INFO_NPNTS) Then
-						sCoordinates = sCoordinates + ","
-					Else
-						sCoordinates = sCoordinates + " ] "
-					End If
-				Next
-			Else
-				Call ProcessRegion(aObjCol, sGeoJSONGeomObjType, sCoordinates)
-			End If
+			iGeoJSONLayerType = GeoJSONPolygonLayer
+
+		Case OBJ_TYPE_REGION 'GeoJSON Polygon or MultiPolygon
+
+			Call ProcessRegion(aObjCol, sGeoJSONGeomObjType, sCoordinates)
+
+			iGeoJSONLayerType = GeoJSONPolygonLayer
+
+		Case OBJ_TYPE_ELLIPSE, 'GeoJSON does not support ellipses (or circles); they need to be converted to regions (watch out: lot of points for a simple circle)
+			OBJ_TYPE_RECT, OBJ_TYPE_ROUNDRECT 'Rectangles (and rounded rectangles) will be converted to regions (GeoJSON Polygons) as well
+
+			oTmpObject = ConvertToRegion(aObjCol)
+			
+			Call ProcessRegion(oTmpObject, sGeoJSONGeomObjType, sCoordinates)
 
 			iGeoJSONLayerType = GeoJSONPolygonLayer
 
 	End Case
 
-	Print #1, Chr$(9) + Chr$(9) + "{"
-	Print #1, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(34) + "type" + Chr$(34) + ": " + Chr$(34) + "Feature" + Chr$(34) + ","
-	Print #1, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(34) + "properties" + Chr$(34) + ": {"
-	Print #1, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(34) + "tooltipContent" + Chr$(34) + ": " + Chr$(34) + sTooltipString + Chr$(34) + ","
-	Print #1, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(34) + "popupContent" + Chr$(34) + ": " + Chr$(34) + sPopUpString + Chr$(34)
-	Print #1, Chr$(9) + Chr$(9) + Chr$(9) + "},"
-	Print #1, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(34) + "geometry" + Chr$(34) + ": {"
-	Print #1, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(34) + "type" + Chr$(34) + ": " + Chr$(34) + sGeoJSONGeomObjType + Chr$(34) + ","
-	Print #1, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(34) + "coordinates" + Chr$(34) + ": [" + sCoordinates + "]"
-	Print #1, Chr$(9) + Chr$(9) + Chr$(9) + "}"
+	sFeatureString = "{" + Chr$(34) + "type" + Chr$(34) + ":" + Chr$(34) + "Feature" + Chr$(34) + "," + Chr$(34) + "properties" + Chr$(34) + ":{"
+	sFeatureString = sFeatureString + sPropertiesString
+	sFeatureString = sFeatureString + Chr$(34) + "popupContent" + Chr$(34) + ":" + Chr$(34) + sPopUpString + Chr$(34) + "},"
+	sFeatureString = sFeatureString + Chr$(34) + "geometry" + Chr$(34) + ":{" + Chr$(34) + "type" + Chr$(34) + ":" + Chr$(34)
+	sFeatureString = sFeatureString + sGeoJSONGeomObjType + Chr$(34) + "," + Chr$(34) + "coordinates" + Chr$(34) + ":[" + sCoordinates + "]" + "}"
 	If i < iNumRows Then
-		Print #1, Chr$(9) + Chr$(9) + "},"
+		sFeatureString = sFeatureString + "},"
 	Else
-		Print #1, Chr$(9) + Chr$(9) + "}"
+		sFeatureString = sFeatureString + "}"
 	End If
+	
+	Print #1, sFeatureString
 Next
 
-Print #1, Chr$(9) + "]"
-Print #1, "};"
-
-'If the table is not present in a Map Window in MapInfo Professional during export
-'the map will be centered on last object added from the table
-sCenter = fY + ", " + fX
+Print #1, "]};"
 
 '--------------------------------------------------------------------------
 ' Create the html file
@@ -314,6 +294,7 @@ Print #2, Chr$(9) + "<meta http-equiv=" + Chr$(34) + "Content-Type" + Chr$(34) +
 Print #2, Chr$(9) + "<meta name=" + Chr$(34) + "viewport" + Chr$(34) + " content=" + Chr$(34) + "width=device-width, initial-scale=1.0" + Chr$(34) + ">"
 Print #2, Chr$(9) + "<link rel=" + Chr$(34) + "stylesheet" + Chr$(34) + " href=" + Chr$(34) + "leaflet-0.7.3/leaflet.css" + Chr$(34) + " />"
 Print #2, Chr$(9) + "<link rel=" + Chr$(34) + "stylesheet" + Chr$(34) + " href=" + Chr$(34) + "leaflet-plugins/leaflet.label.css" + Chr$(34) + " />"
+Print #2, Chr$(9) + "<link rel=" + Chr$(34) + "stylesheet" + Chr$(34) + " href=" + Chr$(34) + "leaflet-plugins/leaflet-search.min.css" + Chr$(34) + " />"
 Print #2, Chr$(9) + "<link rel=" + Chr$(34) + "stylesheet" + Chr$(34) + " href=" + Chr$(34) + "css/page.css" + Chr$(34) + " />"
 Print #2, Chr$(9) + "<link rel=" + Chr$(34) + "stylesheet" + Chr$(34) + " href=" + Chr$(34) + "css/mapinfo.css" + Chr$(34) + " />"
 Print #2, "</head>"
@@ -324,26 +305,18 @@ Print #2, Chr$(9) + "</header>"
 Print #2, Chr$(9) + "<div id=" + Chr$(34) + "main" + Chr$(34) + ">"
 Print #2, Chr$(9) + Chr$(9) + "<div id=" + Chr$(34) + "map" + Chr$(34) + "></div>"
 Print #2, Chr$(9) + Chr$(9) + "<br>"
-Print #2, Chr$(9) + Chr$(9) + "<p>Point data exported from MapInfo Professional: " + sTable2Export + ".TAB</p>"
-Print #2, Chr$(9) + Chr$(9) + "<p>Last modified: " + sCurDate + "</p>"
+Print #2, Chr$(9) + Chr$(9) + "<p>Data exported from MapInfo Professional (using the MapBasic application " + AppName + "): " + sTable2Export + ".TAB</p>"
+Print #2, Chr$(9) + Chr$(9) + "<p>Date: " + sCurDate + "</p>"
 Print #2, Chr$(9) + "</div>"
-Print #2, Chr$(9) + "<script src=" + Chr$(34) + "js/" + PathToFileName$(sGeoJSONFilePath) + Chr$(34) + " type=" + Chr$(34) + "text/javascript" + Chr$(34) + "></script>"
+Print #2, Chr$(9) + "<script src=" + Chr$(34) + "js/" + PathToFileName$(sGeoJSONFilePath) + Chr$(34) + "></script>"
 Print #2, Chr$(9) + "<script src=" + Chr$(34) + "leaflet-0.7.3/leaflet.js" + Chr$(34) + "></script>"
 Print #2, Chr$(9) + "<script src=" + Chr$(34) + "leaflet-plugins/leaflet.label.js" + Chr$(34) + "></script>"
+Print #2, Chr$(9) + "<script src=" + Chr$(34) + "leaflet-plugins/leaflet-search.min.js" + Chr$(34) + "></script>"
 Print #2, Chr$(9) + "<script>"
 sLayerNameTech = sFeatureCollection + "Layer"
 Print #2, sDatasetBounds
 Print #2
-
-If sFitBounds = "" Then
-	sMapString = "setView([" + sCenter + "], 12)"
-Else
-	sMapString = sFitBounds
-End If
-
-sMapString = sMapString + ".setMaxBounds(bounds);"
-
-Print #2, Chr$(9) + Chr$(9) + "var map = L.map('map')." + sMapString
+Print #2, Chr$(9) + Chr$(9) + "var map = L.map('map')." + sFitBounds + ".setMaxBounds(bounds);"
 Print #2
 Print #2, Chr$(9) + Chr$(9) + "// Limit the minimum zoom level to the bounds of the dataset to prevent users from leaving this area on the map"
 Print #2, Chr$(9) + Chr$(9) + "var mz = map.getBoundsZoom(bounds, false);"
@@ -415,6 +388,7 @@ Do Case iGeoJSONLayerType
 		Do Case iGeoJSONLayerType
 			Case GeoJSONLineStringLayer
 				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "weight: 5,"
+				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "opacity: 1,"
 				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "color: '#ff0000'"
 			Case GeoJSONPolygonLayer
 				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "weight: 2,"
@@ -449,7 +423,7 @@ Do Case iGeoJSONLayerType
 		Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + sLayerNameTech + ".resetStyle(e.target);"
 		Print #2,  Chr$(9) + Chr$(9) + "}"
 
-		sStyleValue = "style: style"
+		sStyleValue = Chr$(9) + Chr$(9) + Chr$(9) + "style: style"
 
 		sOptionHighLighting = Chr$(10) + Chr$(9) + Chr$(9) + Chr$(9) + "layer.on({" + Chr$(10)
 		sOptionHighLighting = sOptionHighLighting + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "mouseover: highlightFeature," + Chr$(10)
@@ -463,8 +437,8 @@ Print #2, Chr$(9) + Chr$(9) + "function onEachFeature(feature, layer) {"
 Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "if (feature.properties && feature.properties.popupContent) {"
 Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "layer.bindPopup(feature.properties.popupContent);"
 Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "}"
-Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "if (feature.properties && feature.properties.tooltipContent) {"
-Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "layer.bindLabel(feature.properties.tooltipContent);"
+Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "if (feature.properties && feature.properties." + sTooltipCol + ") {"
+Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "layer.bindLabel(feature.properties." + sTooltipCol + ");"
 Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "}" + sOptionHighLighting
 
 If lZoomInOnClick And iGeoJSONLayerType IN (GeoJSONLineStringLayer, GeoJSONPolygonLayer) Then
@@ -492,6 +466,24 @@ Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(34) + sLayerNamePub + Chr$(34) + ":
 Print #2, Chr$(9) + Chr$(9) + "};"
 Print #2
 Print #2, Chr$(9) + Chr$(9) + "L.control.layers(baseLayers, overlays).addTo(map);"
+
+
+
+Print #2
+Print #2, Chr$(9) + Chr$(9) + "var searchControl = new L.Control.Search({layer: " + sLayerNameTech + ", propertyName: '" + sTooltipCol + "', circleLocation:false});"
+Print #2
+Print #2, Chr$(9) + Chr$(9) + "searchControl.on('search_locationfound', function(e) {"
+Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "e.layer.setStyle({fillColor: '#0000FF', color: '#0000FF'});"
+Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "if(e.layer._popup)"
+Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "e.layer.openPopup();"
+Print #2, Chr$(9) + Chr$(9) + "}).on('search_collapsed', function(e) {"
+Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "featuresLayer.eachLayer(function(layer) { //restore feature color"
+Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "featuresLayer.resetStyle(layer);"
+Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "});"	
+Print #2, Chr$(9) + Chr$(9) + "});"
+Print #2
+Print #2, Chr$(9) + Chr$(9) + "map.addControl( searchControl ); //inizialize search control"
+Print #2
 Print #2, Chr$(9) + "</script>"
 Print #2, "</body>"
 Print #2, "</html>"
@@ -500,12 +492,6 @@ Close File #1
 Close File #2
 
 OnError Goto HandleError
-
-'Dim sLeafletSourceDir, sLeafletDestDir As String
-
-'Copy leaflet-0.7.3
-'sLeafletSourceDir = ApplicationDirectory$() + "leaflet-0.7.3"
-'sLeafletDestDir = PathToDirectory$(sHTMLFilePath) + "leaflet-0.7.3"
 
 'Copy leaflet-0.7.3
 Call CopyDir(ApplicationDirectory$() + "leaflet-0.7.3", PathToDirectory$(sHTMLFilePath) + "leaflet-0.7.3")
@@ -516,17 +502,12 @@ Call CopyDir(ApplicationDirectory$() + "leaflet-plugins", PathToDirectory$(sHTML
 'Copy local css dir
 Call CopyDir(ApplicationDirectory$() + "css", PathToDirectory$(sHTMLFilePath) + "css")
 
-
-'Save File ApplicationDirectory$() + "css\page.css" As PathToDirectory$(sHTMLFilePath) + "page.css"
-'Save File ApplicationDirectory$() + "css\mapinfo.css" As PathToDirectory$(sHTMLFilePath) + "mapinfo.css"
-
 ' Convert the ANSI files to UTF-8
 Call ConvertFileANSItoUTF8(sHTMLFilePathTmp, sHTMLFilePath)
 If FileExists(sHTMLFilePathTmp) Then
 	Kill sHTMLFilePathTmp 	
 End If
-Print sGeoJSONFilePathTmp
-Print sGeoJSONFilePath
+
 Call ConvertFileANSItoUTF8(sGeoJSONFilePathTmp, sGeoJSONFilePath)
 If FileExists(sGeoJSONFilePathTmp) Then
 	Kill sGeoJSONFilePathTmp 	
@@ -559,7 +540,7 @@ Sub EnableLayerSelection
 OnError GoTo HandleError
 
 Dim i As Integer
-Dim fX1, fY1, fX2, fY2 As Float
+Dim fX1, fY1, fX2, fY2, fX1b, fY1b, fX2b, fY2b As Float
 
 	sFitBounds = ""
 	sDatasetBounds = ""
@@ -586,14 +567,14 @@ Dim fX1, fY1, fX2, fY2 As Float
 			fY2 = TableInfo(sTable2Export, TAB_INFO_MAXY)
 
 			'Put an additional margin around all the objects in the table
-			fX1 = fX1 - .15*(fX2-fX1)
-			fY1 = fY1 - .15*(fY2-fY1)
-			fX2 = fX2 + .15*(fX2-fX1)
-			fY2 = fY2 + .15*(fY2-fY1)
+			fX1b = fX1 - .15*(fX2-fX1)
+			fY1b = fY1 - .15*(fY2-fY1)
+			fX2b = fX2 + .15*(fX2-fX1)
+			fY2b = fY2 + .15*(fY2-fY1)
 			
 			sDatasetBounds = Chr$(9) + Chr$(9) + "// These are the bounds of the " + sFeatureCollection + " dataset, plus a little margin" + Chr$(10)
-			sDatasetBounds = sDatasetBounds + Chr$(9) + Chr$(9) + "var southWest = L.latLng(" + fY1 + ", " + fX1 + ")," + Chr$(10)
-			sDatasetBounds = sDatasetBounds + Chr$(9) + Chr$(9) + Chr$(9) + "northEast = L.latLng(" + fY2 + ", " + fX2 + ")," + Chr$(10)
+			sDatasetBounds = sDatasetBounds + Chr$(9) + Chr$(9) + "var southWest = L.latLng(" + fY1b + ", " + fX1b + ")," + Chr$(10)
+			sDatasetBounds = sDatasetBounds + Chr$(9) + Chr$(9) + Chr$(9) + "northEast = L.latLng(" + fY2b + ", " + fX2b + ")," + Chr$(10)
 			sDatasetBounds = sDatasetBounds + Chr$(9) + Chr$(9) + Chr$(9) + "bounds = L.latLngBounds(southWest, northEast);"
 
 			ReDim sColumnsListPopup(UBound(sColumnsList) - 1)
@@ -611,6 +592,15 @@ Dim fX1, fY1, fX2, fY2 As Float
 					sFitBounds = sFitBounds + MapperInfo(WindowID(i), MAPPER_INFO_MAXX) + "]])" 'East
 				End If
 			Next
+			If sFitBounds = "" Then
+				'If the table is not present in a Map Window in MapInfo Professional during export
+				'the map in the web page will be fit to the central part of the dataset
+				fX1b = fX1 + .35*(fX2-fX1)
+				fY1b = fY1 + .35*(fY2-fY1)
+				fX2b = fX2 - .35*(fX2-fX1)
+				fY2b = fY2 - .35*(fY2-fY1)
+				sFitBounds = "fitBounds([[" + fY1b + ", " + fX1b + "], [" + fY2b + ", " + fX2b + "]])"
+			End If
 		End If
 	Else
 		sTable2Export = ""
@@ -1096,7 +1086,7 @@ OnError GoTo HandleError
 	
 	For i = 1 to NumTables()
 
-		If IsVectorTable(TableInfo(i, TAB_INFO_NAME)) Then
+		If IsPointLineOrPolygonTable(TableInfo(i, TAB_INFO_NAME)) Then
 			If NoOfColumns(TableInfo(i, TAB_INFO_NAME), sColumnsList) > 0 Then
 				j = j + 1
 				ReDim sTableList(j)
@@ -1174,68 +1164,47 @@ End Sub LeafletWebsite
 End Sub AddIn_Help
 
 '************************************************************************************
-Function IsVectorTable(ByVal sTable As String) As Logical
+Function IsPointLineOrPolygonTable(ByVal sTable As String) As Logical
 
 OnError GoTo HandleError
 
-	Dim sQuery As String
+	Dim sQuery, sType As String
+	Dim i As Integer
 	
 	sQuery = "Select obj from " + sTable + " Group By 1 Into TestTable"
 	Run Command sQuery
 	
-	If TableInfo("TestTable", TAB_INFO_NROWS) = 1 Then
-		Fetch Rec 1 From TestTable
-		If TestTable.Col1 IN ("Point", "Line", "Polyline", "Region") Then
-			IsVectorTable = TRUE
+	For i = 1 to TableInfo("TestTable", TAB_INFO_NROWS)
+		Fetch Rec i From TestTable
+		If i = 1 Then
+			If TestTable.Col1 IN ("Point", "Multipoint") Then ' GeoJSON Point and MultiPoint
+				sType = "Point"
+				IsPointLineOrPolygonTable = TRUE
+			ElseIf TestTable.Col1 IN ("Arc", "Line", "Polyline") Then 'GeoJSON LineString and MultiLineString
+				sType = "Line"
+				IsPointLineOrPolygonTable = TRUE
+			ElseIf TestTable.Col1 IN ("Ellipse", "Region", "Rectangle", "Rounded Rectangle") Then 'GeoJSON Polygon and MultiPolygon
+				sType = "Polygon"
+				IsPointLineOrPolygonTable = TRUE
+			End If
 		Else
-			IsVectorTable = FALSE
+			If sType = "Point" And TestTable.Col1 IN ("Point", "Multipoint") Then ' GeoJSON Point and MultiPoint
+				IsPointLineOrPolygonTable = TRUE
+			ElseIf sType = "Line" And TestTable.Col1 IN ("Arc", "Line", "Polyline") Then 'GeoJSON LineString and MultiLineString
+				IsPointLineOrPolygonTable = TRUE
+			ElseIf sType = "Polygon" And TestTable.Col1 IN ("Ellipse", "Region", "Rectangle", "Rounded Rectangle") Then 'GeoJSON Polygon and MultiPolygon
+				IsPointLineOrPolygonTable = TRUE
+			Else
+				IsPointLineOrPolygonTable = FALSE
+			End If
 		End If
-	End If
+	Next
 	Close Table TestTable
 
 Exit Function
 '---------------------------
 HandleError:
-    IsVectorTable = FALSE
-
-End Function
-
-'************************************************************************************
-
-Function ReplaceSubStringWith(ByVal sString2Modify As String, ByVal sReplaceSubString As String, ByVal sReplaceWith As String) As String
-	Dim iPtr1, iPtr2 as Integer
-	Dim sBegin, sEnd, sTemp As String
-	
-	sTemp = Chr$(169) + Chr$(38)+ Chr$(181) + Chr$(167) '©&µ§
-
-	If InStr(1, sString2Modify, sTemp) > 0 Or sReplaceSubString = sTemp Then 'Highly unlikely :-) But we'd better be sure :-) 
-		sTemp = Chr$(37) + Chr$(126)+ Chr$(64) + Chr$(62) '%~@>
-	End If
-
-	'Step 1: replace sReplaceSubString with temporary value
-	iPtr1 = InStr(1, sString2Modify, sReplaceSubString)
-
-	While (iPtr1 > 0)
-		sBegin = Left$(sString2Modify, iPtr1 - 1)
-		iPtr2 = iPtr1 + Len(sReplaceSubString) - 1 'If sReplaceSubString is a single character iPtr2 should be the same as iPtr1
-		sEnd = Right$(sString2Modify, Len(sString2Modify) - iPtr2)
-		sString2Modify = sBegin & sTemp & sEnd
-		iPtr1 = InStr(1, sString2Modify, sReplaceSubString)
-	Wend
-
-	'Step 2: replace temporary value with sReplaceWith.
-	'This 2-step approach allows for the sReplaceWith to contain sReplaceSubString, e.g. when you need to replace 'ab' with 'abc'
-	iPtr1 = InStr(1, sString2Modify, sTemp)
-
-	While (iPtr1 > 0)
-		sBegin = Left$(sString2Modify, iPtr1 - 1)
-		iPtr2 = iPtr1 + Len(sTemp) - 1
-		sEnd = Right$(sString2Modify, Len(sString2Modify) - iPtr2)
-		sString2Modify = sBegin & sReplaceWith & sEnd
-		iPtr1 = InStr(1, sString2Modify, sTemp)
-	Wend
-
-	ReplaceSubStringWith = sString2Modify
+    IsPointLineOrPolygonTable = FALSE
 
 End Function
 
@@ -1300,7 +1269,10 @@ HandleError:
   LayerIsInMap = False
 End Function
 '**************************************************************
-Sub ProcessRegion(ByVal oArea As Object, sGeoJSONGeomObjType As String, sCoordinates As String)
+Sub ProcessRegion(ByVal oRegion As Object, sGeoJSONGeomObjType As String, sCoordinates As String)
+'**************************************************************
+
+OnError GoTo HandleError
 
 Dim	iNumPol, iNumNodes, i, j As Integer,
 	oSubObjArray(), oCur, oEmptyObj As Object,
@@ -1309,35 +1281,31 @@ Dim	iNumPol, iNumNodes, i, j As Integer,
 	sGeoJSONGeomObjType = ""
 	sCoordinates = ""
 	
-	If not ObjectInfo(oArea, OBJ_INFO_TYPE) = OBJ_TYPE_REGION Then
+	If not ObjectInfo(oRegion, OBJ_INFO_TYPE) = OBJ_TYPE_REGION Then
 		Exit Sub
 	End If
 
-	iNumPol = ObjectInfo(oArea,OBJ_INFO_NPOLYGONS)
-
-	If iNumPol = 1 Then
-		Exit Sub
-	End If
+	iNumPol = ObjectInfo(oRegion,OBJ_INFO_NPOLYGONS)
 
 	Redim oSubObjArray(iNumPol)
 	Redim sSubCoordinatesArray(iNumPol)
 	
 	For i = 1 To iNumPol
 		sSubCoordinates = ""
-		iNumNodes = ObjectInfo(oArea,OBJ_INFO_NPOLYGONS+i)
+		iNumNodes = ObjectInfo(oRegion,OBJ_INFO_NPOLYGONS+i)
 
 		Create Region
 			Into Variable oCur
-			1 1 (CentroidX(oArea),CentroidY(oArea))  'one dummy point (to fool centroid function)
+			1 1 (CentroidX(oRegion),CentroidY(oRegion))  'one dummy point (to fool centroid function)
 		For j = 1 To iNumNodes
 			Alter Object oCur
-				Node Add Position 1, j+1 (ObjectNodeX(oArea,i,j),ObjectNodeY(oArea,i,j))
+				Node Add Position 1, j+1 (ObjectNodeX(oRegion,i,j),ObjectNodeY(oRegion,i,j))
 
 			If j = 1 Then
 				sSubCoordinates = "[ "
 			End If
 
-			sSubCoordinates = sSubCoordinates + " [" + ObjectNodeX(oArea,i,j) + ", " + ObjectNodeY(oArea,i,j) + "]"
+			sSubCoordinates = sSubCoordinates + " [" + ObjectNodeX(oRegion,i,j) + ", " + ObjectNodeY(oRegion,i,j) + "]"
 
 			If j < iNumNodes Then
 				sSubCoordinates = sSubCoordinates + ","
@@ -1392,5 +1360,155 @@ Dim	iNumPol, iNumNodes, i, j As Integer,
 		
 	End If
 	sCoordinates = sFinalString
-End Sub
-'**********************************************************
+
+Exit Sub
+'---------------------------
+HandleError:
+    Note Error$()
+
+End Sub ProcessRegion
+
+'**************************************************************
+Sub ProcessPline(ByVal oPline As Object, sGeoJSONGeomObjType As String, sCoordinates As String)
+'**************************************************************
+
+OnError GoTo HandleError
+
+Dim	iNumSec, iNumNodes, i, j As Integer,
+	sSubCoordinatesArray(), sSubCoordinates, sFinalString As String
+
+	sGeoJSONGeomObjType = ""
+	sCoordinates = ""
+	
+	If not ObjectInfo(oPline, OBJ_INFO_TYPE) = OBJ_TYPE_PLINE Then
+		Exit Sub
+	End If
+
+	iNumSec = ObjectInfo(oPline,OBJ_INFO_NPOLYGONS) 'number of sections
+
+	Redim sSubCoordinatesArray(iNumSec)
+	
+	For i = 1 To iNumSec
+		sSubCoordinates = ""
+		iNumNodes = ObjectInfo(oPline,OBJ_INFO_NPOLYGONS+i)
+
+		For j = 1 To iNumNodes
+
+			sSubCoordinates = sSubCoordinates + " [" + ObjectNodeX(oPline,i,j) + ", " + ObjectNodeY(oPline,i,j) + "]"
+
+			If j < iNumNodes Then
+				sSubCoordinates = sSubCoordinates + ","
+			End If
+
+		Next
+
+		sSubCoordinatesArray(i) = sSubCoordinates
+		
+	Next
+
+	If UBound(sSubCoordinatesArray) = 1 Then
+		sFinalString = sSubCoordinatesArray(1)
+		sGeoJSONGeomObjType = "LineString"
+	Else
+		For i = 1 to UBound(sSubCoordinatesArray)
+			sFinalString = sFinalString + "[" + sSubCoordinatesArray(i) + "]"
+			If i < UBound(sSubCoordinatesArray) Then
+				sFinalString = sFinalString + ", "
+			End If
+		Next
+		sGeoJSONGeomObjType = "MultiLineString"
+	End If
+	sCoordinates = sFinalString
+
+Exit Sub
+'---------------------------
+HandleError:
+    Note Error$()
+
+End Sub ProcessPline
+
+'************************************************************************************
+
+Function ReplaceSubStringWith(ByVal sString2Modify As String, ByVal sReplaceSubString As String, ByVal sReplaceWith As String) As String
+	Dim iPtr1, iPtr2 as Integer
+	Dim sBegin, sEnd, sTemp As String
+	
+	sTemp = Chr$(169) + Chr$(38)+ Chr$(181) + Chr$(167) '©&µ§
+
+	If InStr(1, sString2Modify, sTemp) > 0 Or sReplaceSubString = sTemp Then 'Highly unlikely :-) But we'd better be sure :-) 
+		sTemp = Chr$(37) + Chr$(126)+ Chr$(64) + Chr$(62) '%~@>
+	End If
+
+	'Step 1: replace sReplaceSubString with temporary value
+	iPtr1 = InStr(1, sString2Modify, sReplaceSubString)
+
+	While (iPtr1 > 0)
+		sBegin = Left$(sString2Modify, iPtr1 - 1)
+		iPtr2 = iPtr1 + Len(sReplaceSubString) - 1 'If sReplaceSubString is a single character iPtr2 should be the same as iPtr1
+		sEnd = Right$(sString2Modify, Len(sString2Modify) - iPtr2)
+		sString2Modify = sBegin & sTemp & sEnd
+		iPtr1 = InStr(1, sString2Modify, sReplaceSubString)
+	Wend
+
+	'Step 2: replace temporary value with sReplaceWith.
+	'This 2-step approach allows for the sReplaceWith to contain sReplaceSubString, e.g. when you need to replace 'ab' with 'abc'
+	iPtr1 = InStr(1, sString2Modify, sTemp)
+
+	While (iPtr1 > 0)
+		sBegin = Left$(sString2Modify, iPtr1 - 1)
+		iPtr2 = iPtr1 + Len(sTemp) - 1
+		sEnd = Right$(sString2Modify, Len(sString2Modify) - iPtr2)
+		sString2Modify = sBegin & sReplaceWith & sEnd
+		iPtr1 = InStr(1, sString2Modify, sTemp)
+	Wend
+
+	ReplaceSubStringWith = sString2Modify
+
+End Function
+
+'**************************************************************
+
+Function ReplaceMultipleSubStrings(ByVal sString2Modify As String, Strings2Replace() As tString2Replace) As String
+
+	Dim i, iPtr1, iPtr2 as Integer
+	Dim sReplaceSubString, sReplaceWith, sBegin, sEnd, sTemp As String
+	
+	For i = 1 to UBound(Strings2Replace)
+	
+		sReplaceSubString = Strings2Replace(i).sReplaceSubString
+		sReplaceWith = Strings2Replace(i).sReplaceWith
+		sTemp = Chr$(169) + Chr$(38)+ Chr$(181) + Chr$(167) '©&µ§
+
+		If InStr(1, sString2Modify, sTemp) > 0 Or sReplaceSubString = sTemp Then 'Highly unlikely :-) But we'd better be sure :-) 
+			sTemp = Chr$(37) + Chr$(126)+ Chr$(64) + Chr$(62) '%~@>
+		End If
+
+		'Step 1: replace sReplaceSubString with temporary value
+		iPtr1 = InStr(1, sString2Modify, sReplaceSubString)
+
+		While (iPtr1 > 0)
+			sBegin = Left$(sString2Modify, iPtr1 - 1)
+			iPtr2 = iPtr1 + Len(sReplaceSubString) - 1 'If sReplaceSubString is a single character iPtr2 should be the same as iPtr1
+			sEnd = Right$(sString2Modify, Len(sString2Modify) - iPtr2)
+			sString2Modify = sBegin & sTemp & sEnd
+			iPtr1 = InStr(1, sString2Modify, sReplaceSubString)
+		Wend
+
+		'Step 2: replace temporary value with sReplaceWith.
+		'This 2-step approach allows for the sReplaceWith to contain sReplaceSubString, e.g. when you need to replace 'ab' with 'abc'
+		iPtr1 = InStr(1, sString2Modify, sTemp)
+
+		While (iPtr1 > 0)
+			sBegin = Left$(sString2Modify, iPtr1 - 1)
+			iPtr2 = iPtr1 + Len(sTemp) - 1
+			sEnd = Right$(sString2Modify, Len(sString2Modify) - iPtr2)
+			sString2Modify = sBegin & sReplaceWith & sEnd
+			iPtr1 = InStr(1, sString2Modify, sTemp)
+		Wend
+
+		ReplaceMultipleSubStrings = sString2Modify
+
+	Next
+
+End Function
+
