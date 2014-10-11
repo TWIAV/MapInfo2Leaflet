@@ -3,7 +3,7 @@
 '**  
 '**  
 '**  Author:	Egge-Jan Pollé
-'**  Date:		10 October 2014
+'**  Date:		11 October 2014
 '************************************************************************************
 Include "MapInfo2Leaflet32.def"
 
@@ -107,8 +107,9 @@ OnError Goto HandleError
 Dim i, j, k, m, iNumRows, iObjectType, iGeoJSONLayerType As Integer
 Dim fX, fY As Float
 Dim aColj, aObjCol As Alias
-Dim sString, sPopUpString, sColumnText, sValue, sCurDate, sStyleValue, sIconValue,
-	sGeoJSONGeomObjType, sCoordinates, sOptionHighLighting, sFeatureString As String
+Dim sString, sPopUpString, sColumnText, sValue, sCurDate, sStyleValue, sIconValue, sZoomToFeatureFunction,
+	sStyleFunction, sHighlightFeatureFunction, sResetHighlightFunction, sOnEachFeatureFunction, sGeoJSONGeomObjType, sCoordinates,
+	sOptionHighLighting, sFeatureString, sCrsString, sLayerNo, sPropertiesString As String
 Dim oTmpObject As Object
 
 Include "ReplacementStrings.mb"
@@ -136,13 +137,11 @@ OnError Goto HandleErrorDuringFileCreation
 '--------------------------------------------------------------------------
 ' Populate the GeoJSON/Javascript file first with a FeatureCollection
 '--------------------------------------------------------------------------
-Print #1, "//Data exported from MapInfo Professional (using the MapBasic application " + AppName + "): " + sTable2Export + ".TAB"
+Print #1, "//Table: " + sTable2Export + ".TAB (exported from MapInfo Professional using " + AppName + ".MBX)" 
 Print #1, "//Date: " + sCurDate
 Print #1, "var " + sFeatureCollection + " = {" + Chr$(34) + "type" + Chr$(34) + ":" + Chr$(34) + "FeatureCollection" + Chr$(34) + "," + Chr$(34) + "features" + Chr$(34) + ": ["
 
 iNumRows = TableInfo(sTable2Export, TAB_INFO_NROWS)
-
-Dim sPropertiesString As String
 
 For i = 1 to iNumRows
 	Fetch Rec i From sTable2Export
@@ -174,30 +173,32 @@ For i = 1 to iNumRows
 
 		End Case
 
-		If ColumnInfo(sTable2Export, Columns2Export(j).sColName, COL_INFO_TYPE) = COL_TYPE_CHAR Then
-			sValue = ReplaceMultipleSubStrings(sValue, tHTMLCharacters)
-		End If
-		If lAddColumnNames Then
-			sColumnText = ReplaceSubStringWith(Columns2Export(j).sColName, Chr$(95), Chr$(32)) + ": "
-		End If
-		If Columns2Export(j).lHyperlink And LooksLikeURL(sValue) Then
-			sColumnText = sColumnText + "<a href=" + Chr$(92) + Chr$(34) + sValue + Chr$(92) + Chr$(34) + ">"
-			aColj = sTable2Export + "." + Columns2Export(j).sAlias
-			sValue = aColj
-			If ColumnInfo(sTable2Export, Columns2Export(j).sAlias, COL_INFO_TYPE) = COL_TYPE_CHAR Then
+		If Columns2Export(j).lInToolTip Then
+			If ColumnInfo(sTable2Export, Columns2Export(j).sColName, COL_INFO_TYPE) = COL_TYPE_CHAR Then
 				sValue = ReplaceMultipleSubStrings(sValue, tHTMLCharacters)
 			End If
-			sColumnText = sColumnText + sValue + "<" + Chr$(92) + "/a>"
-		Else
-			sColumnText = sColumnText + sValue
-		End If
-		If lFirstColumnBold And j = 1 Then
-			sColumnText = "<b>" + sColumnText + "<" + Chr$(92) + "/b>"
-		End If
-		If sPopUpString = "" Then
-			sPopUpString = sColumnText
-		Else
-			sPopUpString = sPopUpString + "<br>" + sColumnText
+			If lAddColumnNames Then
+				sColumnText = ReplaceSubStringWith(Columns2Export(j).sColName, Chr$(95), Chr$(32)) + ": "
+			End If
+			If Columns2Export(j).lHyperlink And LooksLikeURL(sValue) Then
+				sColumnText = sColumnText + "<a href=" + Chr$(92) + Chr$(34) + sValue + Chr$(92) + Chr$(34) + ">"
+				aColj = sTable2Export + "." + Columns2Export(j).sAlias
+				sValue = aColj
+				If ColumnInfo(sTable2Export, Columns2Export(j).sAlias, COL_INFO_TYPE) = COL_TYPE_CHAR Then
+					sValue = ReplaceMultipleSubStrings(sValue, tHTMLCharacters)
+				End If
+				sColumnText = sColumnText + sValue + "<" + Chr$(92) + "/a>"
+			Else
+				sColumnText = sColumnText + sValue
+			End If
+			If lFirstColumnBold And j = 1 Then
+				sColumnText = "<b>" + sColumnText + "<" + Chr$(92) + "/b>"
+			End If
+			If sPopUpString = "" Then
+				sPopUpString = sColumnText
+			Else
+				sPopUpString = sPopUpString + "<br>" + sColumnText
+			End If
 		End If
 	NextLabel:
 	Next
@@ -281,11 +282,20 @@ For i = 1 to iNumRows
 	Print #1, sFeatureString
 Next
 
-Print #1, "]};"
+sCrsString = Chr$(34) + "crs" + Chr$(34) + ":{" + Chr$(34) + "type" + Chr$(34) + ":" + Chr$(34) + "EPSG" + Chr$(34) + ","
+sCrsString = sCrsString + Chr$(34) + "properties" + Chr$(34) + ":{" + Chr$(34) + "code" + Chr$(34) + ":"
+sCrsString = sCrsString + Chr$(34) + "4326" + Chr$(34) + "}}"
+
+Print #1, "]," + sCrsString + "};"
 
 '--------------------------------------------------------------------------
 ' Create the html file
 '--------------------------------------------------------------------------
+
+sLayerNo = "L1" 'Any layer specific Javascript functions will get this layer number attached to them
+'At the moment this tool will only export 1 table/layer at the time (maybe later more?)
+'If you want to merge multiple layers in one file, they should for example not all have a function onEachFeature
+'attached to them, but rather onEachFeatureL1, onEachFeatureL2, etc.
 Print #2, "<!DOCTYPE html>"
 Print #2, "<html>"
 Print #2, "<head>"
@@ -305,7 +315,7 @@ Print #2, Chr$(9) + "</header>"
 Print #2, Chr$(9) + "<div id=" + Chr$(34) + "main" + Chr$(34) + ">"
 Print #2, Chr$(9) + Chr$(9) + "<div id=" + Chr$(34) + "map" + Chr$(34) + "></div>"
 Print #2, Chr$(9) + Chr$(9) + "<br>"
-Print #2, Chr$(9) + Chr$(9) + "<p>Data exported from MapInfo Professional (using the MapBasic application " + AppName + "): " + sTable2Export + ".TAB</p>"
+Print #2, Chr$(9) + Chr$(9) + "<p>Table : " + sTable2Export + ".TAB, exported from MapInfo Professional (using the MapBasic application " + AppName + ".MBX)</p>"
 Print #2, Chr$(9) + Chr$(9) + "<p>Date: " + sCurDate + "</p>"
 Print #2, Chr$(9) + "</div>"
 Print #2, Chr$(9) + "<script src=" + Chr$(34) + "js/" + PathToFileName$(sGeoJSONFilePath) + Chr$(34) + "></script>"
@@ -314,6 +324,8 @@ Print #2, Chr$(9) + "<script src=" + Chr$(34) + "leaflet-plugins/leaflet.label.j
 Print #2, Chr$(9) + "<script src=" + Chr$(34) + "leaflet-plugins/leaflet-search.min.js" + Chr$(34) + "></script>"
 Print #2, Chr$(9) + "<script>"
 sLayerNameTech = sFeatureCollection + "Layer"
+Print #2, Chr$(9) + Chr$(9) + "// The layer " + sLayerNameTech + " is referred to as '" + sLayerNo + "', i.e. all functions and"
+Print #2, Chr$(9) + Chr$(9) + "// variables specific to this layer have the suffix " + sLayerNo
 Print #2, sDatasetBounds
 Print #2
 Print #2, Chr$(9) + Chr$(9) + "var map = L.map('map')." + sFitBounds + ".setMaxBounds(bounds);"
@@ -341,7 +353,9 @@ If lZoomInOnClick Then
 
 		Case GeoJSONLineStringLayer, GeoJSONPolygonLayer
 
-			Print #2, Chr$(9) + Chr$(9) + "function zoomToFeature(e) {"
+			sZoomToFeatureFunction = "zoomToFeature" + sLayerNo
+			
+			Print #2, Chr$(9) + Chr$(9) + "function " + sZoomToFeatureFunction + "(e) {"
 			Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "map.fitBounds(e.target.getBounds(), {padding:[25,25]});"
 			Print #2, Chr$(9) + Chr$(9) +  "}"
 			Print #2
@@ -356,7 +370,9 @@ Do Case iGeoJSONLayerType
 
 		If iPointStyleSetting = 1 Then
 
-			Print #2,  Chr$(9) + Chr$(9) + "var blueArrowIcon = L.icon({"
+			sIconValue = "pngIcon" + sLayerNo
+
+			Print #2,  Chr$(9) + Chr$(9) + "var " + sIconValue + " = L.icon({"
 			Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "iconUrl: 'blue-arrow.png',"
 			Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "iconSize: [32, 37],"
 			Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "iconAnchor: [16, 37],"
@@ -365,13 +381,11 @@ Do Case iGeoJSONLayerType
 			
 			Save File ApplicationDirectory$() + "blue-arrow.png" As PathToDirectory$(sHTMLFilePath) + "blue-arrow.png"
 			
-			sIconValue = "blueArrowIcon"
-
 		ElseIf iPointStyleSetting = 2 Then
 
-			Print #2, Chr$(9) + Chr$(9) + "var miIcon = L.divIcon({className: 'miMarker'});"
+			sIconValue = "divIcon" + sLayerNo
 
-			sIconValue = "miIcon"
+			Print #2, Chr$(9) + Chr$(9) + "var " + sIconValue + " = L.divIcon({className: 'miMarker'});"
 			
 		End If
 
@@ -383,7 +397,9 @@ Do Case iGeoJSONLayerType
 
 	Case GeoJSONLineStringLayer, GeoJSONPolygonLayer
 
-		Print #2,  Chr$(9) + Chr$(9) + "function style(feature) {"
+		sStyleFunction = "style" + sLayerNo
+
+		Print #2,  Chr$(9) + Chr$(9) + "function " + sStyleFunction + "(feature) {"
 		Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + "return {"
 		Do Case iGeoJSONLayerType
 			Case GeoJSONLineStringLayer
@@ -400,7 +416,10 @@ Do Case iGeoJSONLayerType
 		Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + "};"
 		Print #2,  Chr$(9) + Chr$(9) + "}"
 		Print #2
-		Print #2,  Chr$(9) + Chr$(9) + "function highlightFeature(e) {"
+		
+		sHighlightFeatureFunction = "highlightFeature" + sLayerNo
+		
+		Print #2,  Chr$(9) + Chr$(9) + "function " + sHighlightFeatureFunction + "(e) {"
 		Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + "var layer = e.target;"
 		Print #2
 		Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + "layer.setStyle({"
@@ -419,21 +438,27 @@ Do Case iGeoJSONLayerType
 		Print #2
 		Print #2,  Chr$(9) + Chr$(9) + "}"
 		Print #2
-		Print #2,  Chr$(9) + Chr$(9) + "function resetHighlight(e) {"
+		
+		sResetHighlightFunction = "resetHighlight" + sLayerNo
+		
+		Print #2,  Chr$(9) + Chr$(9) + "function " + sResetHighlightFunction + "(e) {"
 		Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + sLayerNameTech + ".resetStyle(e.target);"
 		Print #2,  Chr$(9) + Chr$(9) + "}"
 
-		sStyleValue = Chr$(9) + Chr$(9) + Chr$(9) + "style: style"
+		sStyleValue = Chr$(9) + Chr$(9) + Chr$(9) + "style: " + sStyleFunction
 
 		sOptionHighLighting = Chr$(10) + Chr$(9) + Chr$(9) + Chr$(9) + "layer.on({" + Chr$(10)
-		sOptionHighLighting = sOptionHighLighting + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "mouseover: highlightFeature," + Chr$(10)
-		sOptionHighLighting = sOptionHighLighting + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "mouseout: resetHighlight" + Chr$(10)
+		sOptionHighLighting = sOptionHighLighting + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "mouseover: " + sHighlightFeatureFunction + "," + Chr$(10)
+		sOptionHighLighting = sOptionHighLighting + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "mouseout: " + sResetHighlightFunction + Chr$(10)
 		sOptionHighLighting = sOptionHighLighting + Chr$(9) + Chr$(9) + Chr$(9) + "});"
 
 End Case
 
 Print #2
-Print #2, Chr$(9) + Chr$(9) + "function onEachFeature(feature, layer) {"
+
+sOnEachFeatureFunction = "onEachFeature" + sLayerNo
+
+Print #2, Chr$(9) + Chr$(9) + "function " + sOnEachFeatureFunction + "(feature, layer) {"
 Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "if (feature.properties && feature.properties.popupContent) {"
 Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "layer.bindPopup(feature.properties.popupContent);"
 Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "}"
@@ -445,7 +470,7 @@ If lZoomInOnClick And iGeoJSONLayerType IN (GeoJSONLineStringLayer, GeoJSONPolyg
 
 	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "// When user clicks on a feature the map will zoom in to this particular feature"
 	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "layer.on({"
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "click: zoomToFeature"
+	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "click: " + sZoomToFeatureFunction
 	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "});"
 
 End If
@@ -454,7 +479,7 @@ Print #2, Chr$(9) + Chr$(9) + "}"
 Print #2
 Print #2, Chr$(9) + Chr$(9) + "var " + sLayerNameTech + " = L.geoJson(" + sFeatureCollection + ", {"
 Print #2, sStyleValue + ","
-Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "onEachFeature: onEachFeature"
+Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "onEachFeature: " + sOnEachFeatureFunction
 Print #2, Chr$(9) + Chr$(9) + "}).addTo(map);"
 Print #2
 Print #2, Chr$(9) + Chr$(9) + "var baseLayers = {"
@@ -466,9 +491,6 @@ Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(34) + sLayerNamePub + Chr$(34) + ":
 Print #2, Chr$(9) + Chr$(9) + "};"
 Print #2
 Print #2, Chr$(9) + Chr$(9) + "L.control.layers(baseLayers, overlays).addTo(map);"
-
-
-
 Print #2
 Print #2, Chr$(9) + Chr$(9) + "var searchControl = new L.Control.Search({layer: " + sLayerNameTech + ", propertyName: '" + sTooltipCol + "', circleLocation:false});"
 Print #2
@@ -482,7 +504,7 @@ Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "featuresLayer.resetStyle(laye
 Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "});"	
 Print #2, Chr$(9) + Chr$(9) + "});"
 Print #2
-Print #2, Chr$(9) + Chr$(9) + "map.addControl( searchControl ); //inizialize search control"
+Print #2, Chr$(9) + Chr$(9) + "map.addControl(searchControl); //inizialize search control"
 Print #2
 Print #2, Chr$(9) + "</script>"
 Print #2, "</body>"
@@ -747,7 +769,9 @@ Sub LSDlgOKBtnHandler
 
 OnError Goto HandleError
 
-Dim i As Integer
+Dim i, j As Integer
+Dim lAliasInList As Logical
+Dim sAliasValue As String
 
 	lAddColumnNames = ReadControlValue(LSDlgCBAddColNmID)
 	lFirstColumnBold = ReadControlValue(LSDlgCBCol1BoldID)
@@ -764,6 +788,7 @@ Dim i As Integer
 
 	For i = 1 to UBound(sColumnsListPopup)
 		Columns2Export(i).sColName = sColumnsListPopup(i)
+		Columns2Export(i).lInToolTip = TRUE
 		If sColumnsListPopup(i) = sHyperlink Then
 			Columns2Export(i).lHyperlink = TRUE
 			If ReadControlValue(LSDlgPUMAliasID) > 1 Then
@@ -776,6 +801,23 @@ Dim i As Integer
 			Columns2Export(i).sAlias = ""
 		End If
 	Next
+	
+	If sHyperlink <> "" Then
+		For j = 1 to Ubound(Columns2Export)
+			If Columns2Export(j).sColName = sColumnsList(ReadControlValue(LSDlgPUMAliasID)) Then
+				lAliasInList = TRUE
+				Exit For
+			Else
+				lAliasInList = FALSE
+			End If
+		Next
+		If Not lAliasInList Then
+			j = Ubound(Columns2Export) + 1
+			Redim Columns2Export(j)
+			Columns2Export(i).sColName = sColumnsList(ReadControlValue(LSDlgPUMAliasID))
+			Columns2Export(i).lInToolTip = FALSE
+		End If
+	End If
 
 Exit Sub
 '---------------------------

@@ -3,7 +3,7 @@
 '**  
 '**  
 '**  Author:	Egge-Jan Pollé
-'**  Date:		10 October 2014
+'**  Date:		11 October 2014
 '**  Version:	AppVersion (see below)
 '************************************************************************************
 Include "MAPBASIC.DEF"
@@ -90,6 +90,7 @@ Type tColumn2Export
 	sColName As String
 	lHyperlink As Logical
 	sAlias As String
+	lInToolTip As Logical
 End Type
 
 Global Columns2Export() As tColumn2Export
@@ -106,7 +107,7 @@ Declare Function ReplaceMultipleSubStrings(	'Function similar to the function Re
 
 Define AppName "MapInfo2Leaflet"
 Define AppNameMenu "MapInfo&2Leaflet"
-Define AppVersion "0.21"
+Define AppVersion "0.30"
 
 'Defining Dialog Width and Height
 'This allows you to specify width and height clauses in terms of characters (i.e., Width 30dW, Height 10dH).
