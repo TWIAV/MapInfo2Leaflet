@@ -1,0 +1,26 @@
+!table
+!version 450
+!charset WindowsLatin1
+
+Definition Table
+  Type NATIVE Charset "WindowsLatin1"
+  Fields 8
+    Code_Département Char (2) Index 1 ;
+    Nom_Département Char (23) Index 2 ;
+    Code_Région Char (2) ;
+    Nom_Région Char (50) ;
+    Population Float ;
+    Superficie Float ;
+    Densité Float ;
+    Site_web_CG Char (200) ;
+begin_metadata
+"\IsReadOnly" = "FALSE"
+"\MapInfo" = ""
+"\MapInfo\TableID" = "e9116f92-b79f-461d-94ba-b7c89f8f2652"
+"\ActiveObject" = ""
+"\ActiveObject\Expr" = "Site_web_CG"
+"\ActiveObject\Mode" = "HOTLINK_MODE_BOTH"
+"\ActiveObject\Relative" = "FALSE"
+"\ActiveObject\Enabled" = "TRUE"
+"\ActiveObject\Alias" = ""
+end_metadata

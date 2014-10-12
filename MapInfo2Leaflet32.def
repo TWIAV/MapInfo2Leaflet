@@ -3,7 +3,7 @@
 '**  
 '**  
 '**  Author:	Egge-Jan Pollé
-'**  Date:		11 October 2014
+'**  Date:		12 October 2014
 '**  Version:	AppVersion (see below)
 '************************************************************************************
 Include "MAPBASIC.DEF"
@@ -12,7 +12,7 @@ Include "MENU.DEF"
 
 Declare Sub Main
 Declare Sub ExportDialog
-Declare Sub CreateHTML
+Declare Sub CreateWebMapApplication
 Declare Sub EnableLayerSelection
 Declare Sub ExpDlgOKBtnHandler
 Declare Sub LayerSettingsDialog
@@ -81,7 +81,7 @@ Declare Method RegionalWeekday
     Lib "MBExtensions.dll" (ByVal sDateString as string) As String
 
 Global sTitleWebsite, sHTMLFilePath, sHTMLFilePathTmp, sGeoJSONFilePath, sGeoJSONFilePathTmp, sLayerNamePub, sLayerNameTech, sFeatureCollection As String
-Global sTableList(), sColumnsList(), sTable2Export As String
+Global sTableList(), sColumnsList(), sTable2Export, sDescription As String
 Global sColumnsListPopup(), sColumnsListNonPopup(), sHyperlink, sTooltipCol, sFitBounds, sDatasetBounds As String
 Global lAddColumnNames, lFirstColumnBold, lZoomInOnClick As Logical
 Global iPointStyleSetting As Integer

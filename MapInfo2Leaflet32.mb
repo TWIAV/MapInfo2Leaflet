@@ -3,7 +3,7 @@
 '**  
 '**  
 '**  Author:	Egge-Jan Pollé
-'**  Date:		11 October 2014
+'**  Date:		12 October 2014
 '************************************************************************************
 Include "MapInfo2Leaflet32.def"
 
@@ -13,9 +13,13 @@ Sub Main
 
 OnError Goto HandleError
 
+Dim sHelpMsg As String
+
+sDescription = "Export a MapInfo Table to a Web Map Application using Leaflet"
+
 	Create Menu AppNameMenu As
 		AppNameMenu
-		HelpMsg "Export a MapInfo Table to a Web Page using Leaflet."
+		HelpMsg sDescription
 		Calling ExportDialog,
 		"(-",
 		"&About " + AppName
@@ -30,7 +34,7 @@ OnError Goto HandleError
 	Create ButtonPad AppName As
 		PushButton
 			Icon 8001 File "MIPro2LFLTIcons.dll"
-			HelpMsg "Export a MapInfo Table to a Web Page using Leaflet.\n" + AppName
+			HelpMsg sDescription + "\n" + AppName
 			Calling ExportDialog
 		Show
 		Fixed
@@ -58,7 +62,7 @@ OnError Goto HandleError
 	Call GetVectorTables
 
 	Dialog
-		Title "Export a MapInfo Table to a Web Page using Leaflet"
+		Title sDescription
 		Control StaticText Title "Select &Table to Export:" Position 3dW, 1dH
 		Control PopUpMenu Title From Variable sTableList Value 1 Position 3dW, 2.5dH Width 45dW ID ExpDlgPUMTableID Calling EnableLayerSelection
 	
@@ -86,7 +90,7 @@ OnError Goto HandleError
 		Control Button Title "&Help" Calling AddIn_Help
 		
 		If CommandInfo(CMD_INFO_DLG_OK) Then
-			Call CreateHTML
+			Call CreateWebMapApplication
 		Else 'User canceled
 			Exit Sub
 		End If
@@ -99,7 +103,7 @@ HandleError:
 End Sub ExportDialog
 
 '************************************************************************************
-Sub CreateHTML
+Sub CreateWebMapApplication
 '************************************************************************************
 
 OnError Goto HandleError
@@ -324,8 +328,7 @@ Print #2, Chr$(9) + "<script src=" + Chr$(34) + "leaflet-plugins/leaflet.label.j
 Print #2, Chr$(9) + "<script src=" + Chr$(34) + "leaflet-plugins/leaflet-search.min.js" + Chr$(34) + "></script>"
 Print #2, Chr$(9) + "<script>"
 sLayerNameTech = sFeatureCollection + "Layer"
-Print #2, Chr$(9) + Chr$(9) + "// The layer " + sLayerNameTech + " is referred to as '" + sLayerNo + "', i.e. all functions and"
-Print #2, Chr$(9) + Chr$(9) + "// variables specific to this layer have the suffix " + sLayerNo
+Print #2, Chr$(9) + Chr$(9) + "// The layer " + sLayerNameTech + " is referred to as '" + sLayerNo + "', i.e. all functions and variables specific to this layer have the suffix " + sLayerNo
 Print #2, sDatasetBounds
 Print #2
 Print #2, Chr$(9) + Chr$(9) + "var map = L.map('map')." + sFitBounds + ".setMaxBounds(bounds);"
@@ -535,7 +538,7 @@ If FileExists(sGeoJSONFilePathTmp) Then
 	Kill sGeoJSONFilePathTmp 	
 End If
 
-If AskAgain("Html file created: " + sHTMLFilePath + Chr$(10) + "Do you want to open it in a browser?", AppName) Then
+If AskAgain("Web Map Application created:" + Chr$(10) + sHTMLFilePath + Chr$(10) + Chr$(10) + "Do you want to open it in a browser?", AppName) Then
 	Call OpenFileOrDir(sHTMLFilePath)
 End If
 
@@ -553,7 +556,7 @@ HandleErrorDuringFileCreation:
 	Close File #2
 	Note Error$()
 
-End Sub CreateHTML
+End Sub CreateWebMapApplication
 
 '*********************************************************************************************
 Sub EnableLayerSelection
@@ -562,7 +565,8 @@ Sub EnableLayerSelection
 OnError GoTo HandleError
 
 Dim i As Integer
-Dim fX1, fY1, fX2, fY2, fX1b, fY1b, fX2b, fY2b As Float
+Dim fX1, fY1, fX2, fY2, fX1ds, fY1ds, fX2ds, fY2ds, fX1mw, fY1mw, fX2mw, fY2mw As Float
+Dim oMapWindow, oDataset As Object
 
 	sFitBounds = ""
 	sDatasetBounds = ""
@@ -582,6 +586,11 @@ Dim fX1, fY1, fX2, fY2, fX1b, fY1b, fX2b, fY2b As Float
 			sLayerNamePub = ReplaceSubStringWith(sTable2Export, Chr$(95), Chr$(32))  'Visible for the user in the Leaflet Layers Control
 			sFeatureCollection = ReplaceSubStringWith(LCase$(sLayerNamePub), Chr$(32), Chr$(95)) 'Used as the GeoJSON var name
 
+			ReDim sColumnsListPopup(UBound(sColumnsList) - 1)
+			For i = 2 To UBound(sColumnsList)
+				sColumnsListPopup(i - 1) = sColumnsList(i)
+			Next
+
 			'Take the minimum and maximum x- and y-coordinates of all objects in the table
 			fX1 = TableInfo(sTable2Export, TAB_INFO_MINX)
 			fY1 = TableInfo(sTable2Export, TAB_INFO_MINY)
@@ -589,40 +598,48 @@ Dim fX1, fY1, fX2, fY2, fX1b, fY1b, fX2b, fY2b As Float
 			fY2 = TableInfo(sTable2Export, TAB_INFO_MAXY)
 
 			'Put an additional margin around all the objects in the table
-			fX1b = fX1 - .15*(fX2-fX1)
-			fY1b = fY1 - .15*(fY2-fY1)
-			fX2b = fX2 + .15*(fX2-fX1)
-			fY2b = fY2 + .15*(fY2-fY1)
+			fX1ds = fX1 - .15*(fX2-fX1)
+			fY1ds = fY1 - .15*(fY2-fY1)
+			fX2ds = fX2 + .15*(fX2-fX1)
+			fY2ds = fY2 + .15*(fY2-fY1)
 			
-			sDatasetBounds = Chr$(9) + Chr$(9) + "// These are the bounds of the " + sFeatureCollection + " dataset, plus a little margin" + Chr$(10)
-			sDatasetBounds = sDatasetBounds + Chr$(9) + Chr$(9) + "var southWest = L.latLng(" + fY1b + ", " + fX1b + ")," + Chr$(10)
-			sDatasetBounds = sDatasetBounds + Chr$(9) + Chr$(9) + Chr$(9) + "northEast = L.latLng(" + fY2b + ", " + fX2b + ")," + Chr$(10)
-			sDatasetBounds = sDatasetBounds + Chr$(9) + Chr$(9) + Chr$(9) + "bounds = L.latLngBounds(southWest, northEast);"
-
-			ReDim sColumnsListPopup(UBound(sColumnsList) - 1)
-			For i = 2 To UBound(sColumnsList)
-				sColumnsListPopup(i - 1) = sColumnsList(i)
-			Next
 			For i = 1 To NumWindows()
 				If LayerIsInMap(WindowID(i), sTable2Export) Then
 					'If the table is present in a Map Window in MapInfo Professional during export
 					'the map in the web page will be fit to the bounds of this Map Window
-					sFitBounds = "fitBounds([["
-					sFitBounds = sFitBounds + MapperInfo(WindowID(i), MAPPER_INFO_MINY) + ", " 'South
-					sFitBounds = sFitBounds + MapperInfo(WindowID(i), MAPPER_INFO_MINX) + "], [" 'West
-					sFitBounds = sFitBounds + MapperInfo(WindowID(i), MAPPER_INFO_MAXY) + ", " 'North
-					sFitBounds = sFitBounds + MapperInfo(WindowID(i), MAPPER_INFO_MAXX) + "]])" 'East
+					fX1mw = MapperInfo(WindowID(i), MAPPER_INFO_MINX)
+					fY1mw = MapperInfo(WindowID(i), MAPPER_INFO_MINY)
+					fX2mw = MapperInfo(WindowID(i), MAPPER_INFO_MAXX)
+					fY2mw = MapperInfo(WindowID(i), MAPPER_INFO_MAXY)
+					
+					sFitBounds = "fitBounds([[" + fY1mw + ", " + fX1mw + "], [" + fY2mw + ", " + fX2mw + "]])" 'South - West - North - East
+					
+					Create Rect Into Variable oMapWindow (fX1mw, fY1mw) (fX2mw, fY2mw)
+					Create Rect Into Variable oDataset (fX1ds, fY1ds) (fX2ds, fY2ds)
+					
+					If oDataset Entirely Within oMapWindow Then
+						fX1ds = fX1mw
+						fY1ds = fY1mw
+						fX2ds = fX2mw
+						fY2ds = fY2mw
+					End If
 				End If
 			Next
 			If sFitBounds = "" Then
 				'If the table is not present in a Map Window in MapInfo Professional during export
 				'the map in the web page will be fit to the central part of the dataset
-				fX1b = fX1 + .35*(fX2-fX1)
-				fY1b = fY1 + .35*(fY2-fY1)
-				fX2b = fX2 - .35*(fX2-fX1)
-				fY2b = fY2 - .35*(fY2-fY1)
-				sFitBounds = "fitBounds([[" + fY1b + ", " + fX1b + "], [" + fY2b + ", " + fX2b + "]])"
+				fX1mw = fX1 + .35*(fX2-fX1)
+				fY1mw = fY1 + .35*(fY2-fY1)
+				fX2mw = fX2 - .35*(fX2-fX1)
+				fY2mw = fY2 - .35*(fY2-fY1)
+				sFitBounds = "fitBounds([[" + fY1mw + ", " + fX1mw + "], [" + fY2mw + ", " + fX2mw + "]])"
 			End If
+
+			sDatasetBounds = Chr$(9) + Chr$(9) + "// These are the bounds of the " + sFeatureCollection + " dataset, plus a margin" + Chr$(10)
+			sDatasetBounds = sDatasetBounds + Chr$(9) + Chr$(9) + "var southWest = L.latLng(" + fY1ds + ", " + fX1ds + ")," + Chr$(10)
+			sDatasetBounds = sDatasetBounds + Chr$(9) + Chr$(9) + Chr$(9) + "northEast = L.latLng(" + fY2ds + ", " + fX2ds + ")," + Chr$(10)
+			sDatasetBounds = sDatasetBounds + Chr$(9) + Chr$(9) + Chr$(9) + "bounds = L.latLngBounds(southWest, northEast);"
+
 		End If
 	Else
 		sTable2Export = ""
@@ -1150,16 +1167,15 @@ Sub About
 
 	Dialog 
 		Title "About " + AppName + " (Version " + AppVersion + ")" 
-		Control StaticText Title "With " + AppName + " you can export a MapInfo table to a web page" Position 1dW, 1dH
-		Control StaticText Title "using Leaflet - the output consists of an html file, a js file." Position 1dW, 2dH
-		Control StaticText Title "(containing a GeoJSON FeatureCollection) and a css file for the styling." Position 1dW, 3dH
-		Control StaticText Title "Leaflet is a modern open-source JavaScript library for mobile-friendly" Position 1dW, 5dH
-		Control StaticText Title "interactive maps." Position 1dW, 6dH
-		Control StaticText Title "More information:" Position 1dW, 8dH
-		Control Button Title "http://leafletjs.com/" Position 16dW, 8dH Calling LeafletWebsite
-		Control StaticText Title "This version is compatible with the 'classic' 32 bit version of" Position 1dW, 10.5dH
-		Control StaticText Title "MapInfo Professional (9.5 or higher)" Position 1dW, 11.5dH
-		Control StaticText Title Chr$(169) + " 2014 - TWIAV.NL" Position 36dW, 13dH
+		Control StaticText Title "With " + AppName + " you can export a MapInfo table to a web mapping application" Position 1dW, 1dH
+		Control StaticText Title "using Leaflet - the output consists of an html file, a js file (containing a GeoJSON" Position 1dW, 2dH
+		Control StaticText Title "FeatureCollection) and css files for the styling." Position 1dW, 3dH
+		Control StaticText Title "Leaflet is a modern open-source JavaScript library for mobile-friendly interactive maps." Position 1dW, 5dH
+		Control StaticText Title "More information:" Position 1dW, 7dH
+		Control Button Title "http://leafletjs.com/" Position 16dW, 7dH Calling LeafletWebsite
+		Control StaticText Title "This version is compatible with the 'classic' 32 bit version of MapInfo Professional" Position 1dW, 9.5dH
+		Control StaticText Title "(version 9.5 or higher)" Position 1dW, 10.5dH
+		Control StaticText Title Chr$(169) + " 2014 - TWIAV.NL" Position 48dW, 12dH
 		Control OKButton Title "&Exit" Calling Bye
 		Control CancelButton Title "&Cancel"
 		Control Button Title "&Help" Calling AddIn_Help
