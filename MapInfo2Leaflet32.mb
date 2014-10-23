@@ -3,7 +3,7 @@
 '**  
 '**  
 '**  Author:	Egge-Jan Pollé
-'**  Date:		22 October 2014
+'**  Date:		23 October 2014
 '************************************************************************************
 Include "MapInfo2Leaflet32.def"
 
@@ -153,7 +153,7 @@ For i = 1 to iNumRows
 	If lAddColumnNames Then
 		sPopUpString = "<table class = " + Chr$(92) + Chr$(34) + "miPopupTable" + Chr$(92) + Chr$(34) + ">"
 	Else
-		sPopUpString = "<table class = " + Chr$(92) + Chr$(34) + "miPopupSingleColumn" + Chr$(92) + Chr$(34) + ">"
+		sPopUpString = ""
 	End If
 	sTooltipCol = LCase$(ReplaceMultipleSubStrings(sTooltipCol, tAccentuatedCharacters))
 	For j = 1 to UBound(Columns2Export)
@@ -202,12 +202,18 @@ For i = 1 to iNumRows
 			If lFirstColumnBold And j = 1 Then
 				sColumnText = "<b>" + sColumnText + "<" + Chr$(92) + "/b>"
 			End If
-			sColumnText = "<tr><td>" + sColumnText + "<" + Chr$(92) + "/td><" + Chr$(92) + "/tr>"
+			If lAddColumnNames Then
+				sColumnText = "<tr><td>" + sColumnText + "<" + Chr$(92) + "/td><" + Chr$(92) + "/tr>"
+			Else
+				sColumnText = sColumnText + "<br>"
+			End If
 			sPopUpString = sPopUpString + sColumnText
 		End If
 	NextLabel:
 	Next
-	sPopUpString = sPopUpString + "<" + Chr$(92) + "/table>"
+	If lAddColumnNames Then
+		sPopUpString = sPopUpString + "<" + Chr$(92) + "/table>"
+	End If
 
 	aObjCol = sTable2Export + ".obj"
 

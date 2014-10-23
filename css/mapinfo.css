@@ -21,9 +21,3 @@
 .miPopupTable tr > td:first-child {
 	background-color: #D8D8D8;
 }
-.miPopupSingleColumn  td {
-	border: 1px solid #FFFFFF;
-	border-collapse: collapse;
-	padding-left: 5px;
-	padding-right: 10px;
-}
