@@ -3,7 +3,7 @@
 '**  
 '**  
 '**  Author:	Egge-Jan Pollé
-'**  Date:		12 October 2014
+'**  Date:		27 October 2014
 '**  Version:	AppVersion (see below)
 '************************************************************************************
 Include "MAPBASIC.DEF"
@@ -19,6 +19,7 @@ Declare Sub LayerSettingsDialog
 Declare Sub StyleSettingsDialog
 Declare Sub CheckForHyperlinks
 Declare Sub RemoveHyperLink
+Declare Sub AddColNamesHandler
 Declare Sub NonAddedColumnsHandler
 Declare Sub AddedColumnsHandler
 Declare Sub ModifyColumnsListPopupAdd
@@ -40,6 +41,10 @@ Declare Sub AddIn_Help
 Declare Function IsPointLineOrPolygonTable(ByVal sTable As String) As Logical
 Declare Function LayerIsInMap(ByVal iWindowID As Integer, ByVal sLayerName As String) As Logical
 
+Declare Function ExtractThematicValues(ByVal sMapWindow As String, sThemeLayer As String, sThemeCol As String,
+	sValueArray() As String, sColorValsArray() As String, sMaxValue As String, sDefaultColor As String) As Integer
+
+
 Declare Function ReplaceSubStringWith(	'E.g. replace underscore ("_" or Chr$(95)) with space (" " or Chr$(32)) 
 	ByVal sString2Modify As String		'String with substring to be replaced, e.g. "a_b_c_d"
 	, ByVal sReplaceSubString As String	'Substring to be replaced - one or more characters
@@ -57,6 +62,7 @@ Declare Method AskAgain Class "MBExtensions.MBDialogs" Lib "MBExtensions.dll" (B
 Declare Method Warn Class "MBExtensions.MBDialogs" Lib "MBExtensions.dll" (ByVal sWarning As String, ByVal sCaption As String) As Logical
 Declare Method BrowseForFolder Class "MBExtensions.MBDialogs" Lib "MBExtensions.dll" (ByVal sDescription As String, ByVal sFolder As String) As String
 Declare Method OpenFileOrDir Class "MBExtensions.MBFileManagement" Lib "MBExtensions.dll" (ByVal sOpen As String)
+Declare Method hexCol Class "MBExtensions.MBColors" Lib "MBExtensions.dll" (ByVal iMIColor As Integer) As String
 
 ' /////     Class "MBExtensions.MBDateAndTime"     /////
 ' Allows you to retreive information from a MapBasic Date (i.e. YYYYMMDD) or
@@ -83,8 +89,9 @@ Declare Method RegionalWeekday
 Global sTitleWebsite, sHTMLFilePath, sHTMLFilePathTmp, sGeoJSONFilePath, sGeoJSONFilePathTmp, sLayerNamePub, sLayerNameTech, sFeatureCollection As String
 Global sTableList(), sColumnsList(), sTable2Export, sDescription As String
 Global sColumnsListPopup(), sColumnsListNonPopup(), sHyperlink, sTooltipCol, sFitBounds, sDatasetBounds As String
-Global lAddColumnNames, lFirstColumnBold, lZoomInOnClick As Logical
-Global iPointStyleSetting As Integer
+Global lAddColumnNames, lFirstColumnBold, lZoomInOnClick, lExportTheme As Logical
+Global iPointStyleSetting, iTarget, iTheme As Integer
+Global sThemeLayer, sThemeCol, sValueArray(), sColorValsArray(), sMaxValue, sDefaultColor As String
 
 Type tColumn2Export
 	sColName As String
@@ -150,6 +157,7 @@ Define LSDlgSTHLColID			722
 Define LSDlgETHLColID			723
 Define LSDlgSTAliasID			724
 Define LSDlgPUMAliasID			725
+Define LSDlgRGTargetID			726
 Define LSDlgBtnRemHLID			731
 Define LSDlgCBZmClckID			732
 Define LSDlgSTTTipID			735

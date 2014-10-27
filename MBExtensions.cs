@@ -117,6 +117,26 @@ namespace MBExtensions
 			}
 		}
 	}
+	// The MBColors class
+	class MBColors
+	{
+      public static string hexCol(int miColor)
+      {
+		int red;
+		int green;
+		int blue;
+		
+		red = miColor/65536;
+		green = (miColor - red*65536)/256;
+		blue = miColor - red*65536 - green*256;
+	  
+        System.Drawing.Color rgbColor = System.Drawing.Color.FromArgb(red, green, blue);
+
+		string hex = "#" + rgbColor.R.ToString("X2") + rgbColor.G.ToString("X2") + rgbColor.B.ToString("X2");
+         
+        return hex;
+      }
+    }
 	// The MBDateAndTime class
 	class MBDateAndTime
 	{

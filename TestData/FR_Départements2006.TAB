@@ -11,7 +11,7 @@ Definition Table
     Nom_Région Char (50) ;
     Population Float ;
     Superficie Float ;
-    Densité Float ;
+    Densité Float Index 3 ;
     Site_web_CG Char (200) ;
 begin_metadata
 "\IsReadOnly" = "FALSE"
