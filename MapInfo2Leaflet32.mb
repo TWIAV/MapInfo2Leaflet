@@ -62,6 +62,10 @@ OnError Goto HandleError
 	If iTarget = 0 Then
 		iTarget = 2
 	End If
+	
+	If sExportFolder = "" Then
+		sExportFolder = GetFolderPath$(FOLDER_MYDOCS) + "\"
+	End If
 
 	Call GetVectorTables
 
@@ -118,7 +122,7 @@ Dim aColj, aObjCol As Alias
 Dim sString, sPopUpString, sColumnText, sValue, sCurDate, sStyleValue, sIconValue, sZoomToFeatureFunction,
 	sStyleFunction, sHighlightFeatureFunction, sResetHighlightFunction, sOnEachFeatureFunction, sGeoJSONGeomObjType, sCoordinates,
 	sOptionHighLighting, sFeatureString, sCrsString, sLayerNo, sPropertiesString, sTargetText, sThemeColoring, sBorderLineWeightValuePolygon,
-	sBorderColorValuePolygon, sFillColorValuePolygon, sFillOpacityValuePolygon, sGrades As String
+	sBorderColorValuePolygon, sFillColorValuePolygon, sFillOpacityValuePolygon, sRanges, sValues As String
 Dim oTmpObject As Object
 
 Include "ReplacementStrings.mb"
@@ -127,7 +131,7 @@ Include "ReplacementStrings.mb"
 	sCurDate = RegionalLongDate(sCurDate)
 
 '---------------------------------------
-Call CreateDir(PathToDirectory$(sHTMLFilePath) + "js")
+Call CreateDir(sExportFolder + "js")
 Open File sGeoJSONFilePathTmp For Output Access Write As #1 CharSet SystemInfo(SYS_INFO_CHARSET)'"WindowsLatin1"
 Open File sHTMLFilePathTmp For Output Access Write As #2 CharSet SystemInfo(SYS_INFO_CHARSET)'"WindowsLatin1"
 OnError Goto HandleErrorDuringFileCreation
@@ -393,18 +397,34 @@ If lZoomInOnClick Then
 	End Case
 End If
 
-If lExportTheme And iTheme = 1 Then
+If lExportTheme Then
 
 	Print #2, Chr$(9) + Chr$(9) + "function getColor(d) {"
 	
-	sThemeColoring = ""
-	For i = 1 To UBound(sValueArray)
-		If i < UBound(sValueArray) Then
-			sThemeColoring = Chr$(10) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "d > " + sValueArray(i) + " ? '" + sColorValsArray(i) + "' :" + sThemeColoring
-		Else
-			sThemeColoring = Chr$(9) + Chr$(9) + Chr$(9) + "return d > " + sValueArray(i) + " ? '" + sColorValsArray(i) + "' :" + sThemeColoring
-		End If
-	Next
+	Do Case iTheme
+
+	Case 1 'Ranges
+
+		sThemeColoring = ""
+		For i = 1 To UBound(sValuesArray)
+			If i < UBound(sValuesArray) Then
+				sThemeColoring = Chr$(10) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "d >= " + sValuesArray(i) + " ? '" + sColorValsArray(i) + "' :" + sThemeColoring
+			Else
+				sThemeColoring = Chr$(9) + Chr$(9) + Chr$(9) + "return d >= " + sValuesArray(i) + " ? '" + sColorValsArray(i) + "' :" + sThemeColoring
+			End If
+		Next
+
+	Case 2 'Individual Values
+		sThemeColoring = ""
+		For i = 1 To UBound(sValuesArray)
+			If i < UBound(sValuesArray) Then
+				sThemeColoring = Chr$(10) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "d == '" + sValuesArray(i) + "' ? '" + sColorValsArray(i) + "' :" + sThemeColoring
+			Else
+				sThemeColoring = Chr$(9) + Chr$(9) + Chr$(9) + "return d == '" + sValuesArray(i) + "' ? '" + sColorValsArray(i) + "' :" + sThemeColoring
+			End If
+		Next
+
+	End Case
 
 	Print #2, sThemeColoring
 	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "'" + sDefaultColor + "';"
@@ -439,7 +459,7 @@ Do Case iGeoJSONLayerType
 			Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "popupAnchor: [0, -28]"
 			Print #2,  Chr$(9) + Chr$(9) + "});"
 			
-			Save File ApplicationDirectory$() + "blue-arrow.png" As PathToDirectory$(sHTMLFilePath) + "blue-arrow.png"
+			Save File ApplicationDirectory$() + "blue-arrow.png" As sExportFolder + "blue-arrow.png"
 			
 		ElseIf iPointStyleSetting = 2 Then
 
@@ -465,7 +485,7 @@ Do Case iGeoJSONLayerType
 			Case GeoJSONLineStringLayer
 				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "weight: 5,"
 				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "opacity: 1,"
-				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "color: '#ff0000'"
+				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "color: " + sFillColorValuePolygon
 			Case GeoJSONPolygonLayer
 				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "weight: " + sBorderLineWeightValuePolygon + ","
 				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "opacity: 1,"
@@ -579,28 +599,55 @@ If lExportTheme Then
 	Print #2
 	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "var div = L.DomUtil.create('div', 'info legend'),"
 
-	sGrades = "grades = ["
-	For i = 1 to UBound(sValueArray)
-		If i < UBound(sValueArray) Then
-			sGrades = sGrades + sValueArray(i) + ", "
-		Else
-			sGrades = sGrades + sValueArray(i) + "],"
-		End If
-	Next
+	Do Case iTheme
+	
+	Case 1 'Ranges
+	
+		sRanges = "ranges = ["
+		For i = 1 to UBound(sValuesArray)
+			If i < UBound(sValuesArray) Then
+				sRanges = sRanges + sValuesArray(i) + ", "
+			Else
+				sRanges = sRanges + sValuesArray(i) + "],"
+			End If
+		Next
 
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + sGrades
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "maxValue = " + sMaxValue + ","
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "labels = [];"
+		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + sRanges
+		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "maxValue = " + sMaxValue + ","
+		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "labels = [];"
+		Print #2
+		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "// loop through the intervals and generate a label with a colored square for each"
+		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "for (var i = 0; i < ranges.length; i++) {"
+		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "div.innerHTML +="
+		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "'<i style=" + Chr$(34) + "background:' + getColor(ranges[i] + 1) + '" + Chr$(34) + "></i> ' +"
+		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "ranges[i] + (ranges[i + 1] ? '&ndash;' + ranges[i + 1] + '<br>' : '&ndash;' + maxValue);"
+		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "}"
+
+	Case 2 'Individual Values
+	
+		sValues = "values = ["
+		For i = 1 to UBound(sValuesArray)
+			If i < UBound(sValuesArray) Then
+				sValues = sValues + "'" + sValuesArray(i) + "', "
+			Else
+				sValues = sValues + "'" + sValuesArray(i) + "'],"
+			End If
+		Next
+
+		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + sValues
+		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "labels = [];"
+		Print #2
+		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "// loop through the intervals and generate a label with a colored square for each"
+		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "for (var i = 0; i < values.length; i++) {"
+		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "div.innerHTML +="
+		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "'<i style=" + Chr$(34) + "background:' + getColor(values[i]) + '" + Chr$(34) + "></i> ' +"
+		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "values[i] + '<br>';"
+		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "}"
+
+	End Case
+
 	Print #2
-	Print #2, Chr$(9) + Chr$(9) + "div.innerHTML = '<b>Title</b><br>';"
-	Print #2, Chr$(9) + Chr$(9) + "div.innerHTML += 'Sub Title<br>';"
-	Print #2
-	Print #2, Chr$(9) + Chr$(9) + "// loop through the intervals and generate a label with a colored square for each"
-	Print #2, Chr$(9) + Chr$(9) + "for (var i = 0; i < grades.length; i++) {"
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "div.innerHTML +="
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "'<i style=" + Chr$(34) + "background:' + getColor(grades[i] + 1) + '" + Chr$(34) + "></i> ' +"
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "grades[i] + (grades[i + 1] ? '&ndash;' + grades[i + 1] + '<br>' : '&ndash;' + maxValue);"
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "}"
+	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "div.innerHTML = '<b>Title</b><br>Sub Title<br>' + div.innerHTML;"
 	Print #2
 	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "return div;"
 	Print #2, Chr$(9) + Chr$(9) + "};"
@@ -618,13 +665,13 @@ Close File #2
 OnError Goto HandleError
 
 'Copy leaflet-0.7.3
-Call CopyDir(ApplicationDirectory$() + "leaflet-0.7.3", PathToDirectory$(sHTMLFilePath) + "leaflet-0.7.3")
+Call CopyDir(ApplicationDirectory$() + "leaflet-0.7.3", sExportFolder + "leaflet-0.7.3")
 
 'Copy leaflet-plugins
-Call CopyDir(ApplicationDirectory$() + "leaflet-plugins", PathToDirectory$(sHTMLFilePath) + "leaflet-plugins")
+Call CopyDir(ApplicationDirectory$() + "leaflet-plugins", sExportFolder + "leaflet-plugins")
 
 'Copy local css dir
-Call CopyDir(ApplicationDirectory$() + "css", PathToDirectory$(sHTMLFilePath) + "css")
+Call CopyDir(ApplicationDirectory$() + "css", sExportFolder + "css")
 
 ' Convert the ANSI files to UTF-8
 Call ConvertFileANSItoUTF8(sHTMLFilePathTmp, sHTMLFilePath)
@@ -675,10 +722,10 @@ Dim oMapWindow, oDataset As Object
 		If NoOfColumns(sTable2Export, sColumnsList) > 0 Then
 			Alter Control ExpDlgBtnLaySetID Enable
 			Alter Control ExpDlgSTStep2ID Enable
-			sHTMLFilePath = PathToDirectory$(TableInfo(sTable2Export, TAB_INFO_TABFILE)) + sTable2Export + ".html"
-			sHTMLFilePathTmp = PathToDirectory$(TableInfo(sTable2Export, TAB_INFO_TABFILE)) + sTable2Export + "_tmp.html"
-			sGeoJSONFilePath = PathToDirectory$(TableInfo(sTable2Export, TAB_INFO_TABFILE)) + "js\" + sTable2Export + ".js"
-			sGeoJSONFilePathTmp = PathToDirectory$(TableInfo(sTable2Export, TAB_INFO_TABFILE)) + "js\" + sTable2Export + "_tmp.js"
+			sHTMLFilePath = sExportFolder + sTable2Export + ".html"
+			sHTMLFilePathTmp = sExportFolder + sTable2Export + "_tmp.html"
+			sGeoJSONFilePath = sExportFolder + "js\" + sTable2Export + ".js"
+			sGeoJSONFilePathTmp = sExportFolder + "js\" + sTable2Export + "_tmp.js"
 			Alter Control ExpDlgETHTMLFilePathID Value sHTMLFilePath
 			sTitleWebsite = ReplaceSubStringWith(sTable2Export, Chr$(95), Chr$(32))
 			Alter Control ExpDlgETTitleWebPageID Value sTitleWebsite
@@ -780,14 +827,14 @@ Sub ExpDlgOKBtnHandler
 
 OnError Goto HandleError
 
-Dim sHTMLDirectory, sHTMLFile As String
+Dim sHTMLFile As String
 
 		sHTMLFilePath = ReadControlValue(ExpDlgETHTMLFilePathID)
 		sHTMLFilePathTmp = Left$(sHTMLFilePath, Len(sHTMLFilePath) - 5) + "_tmp.html"
-		sHTMLDirectory = PathToDirectory$(sHTMLFilePath)
+		sExportFolder = PathToDirectory$(sHTMLFilePath)
 		sHTMLFile = PathToFileName$(sHTMLFilePath)
-		sGeoJSONFilePath = sHTMLDirectory + "js\" + Left$(sHTMLFile, Len(sHTMLFile) - 5) + ".js"
-		sGeoJSONFilePathTmp = sHTMLDirectory + "js\" + Left$(sHTMLFile, Len(sHTMLFile) - 5) + "_tmp.js"
+		sGeoJSONFilePath = sExportFolder + "js\" + Left$(sHTMLFile, Len(sHTMLFile) - 5) + ".js"
+		sGeoJSONFilePathTmp = sExportFolder + "js\" + Left$(sHTMLFile, Len(sHTMLFile) - 5) + "_tmp.js"
 		sTitleWebsite = ReadControlValue(ExpDlgETTitleWebPageID)
 
 Exit Sub
@@ -804,25 +851,30 @@ Sub LayerSettingsDialog
 OnError Goto HandleError
 
 Dim sMapWindow As String
+Dim i, iMapWindowID As Integer
 
 	ReDim sColumnsListNonPopup(0)
-
-	'Check for thematic layer (ranges or values) in front window
-	'sMapWindow becomes a string of MapBasic statements that can be used in a Run Command statement to duplicate a window
-	sMapWindow = WindowInfo(FrontWindow(), WIN_INFO_CLONEWINDOW)
-	iTheme = ExtractThematicValues(sMapWindow, sThemeLayer, sThemeCol, sValueArray, sColorValsArray, sMaxValue, sDefaultColor)
 	
-	If iTheme > 0 And sThemeLayer = sTable2Export Then
-		lExportTheme = AskAgain("Do you want to export the thematic layer on " + sThemeLayer + "?", AppName)
-		If Not lExportTheme Then
-			sThemeLayer = ""
-			sThemeCol = ""
-			ReDim sValueArray(0)
-			ReDim sColorValsArray(0)
-			sMaxValue = ""
-			sDefaultColor = ""
+	For i = 1 to NumWindows()
+		iMapWindowID = WindowID(i)
+		'Check for thematic layer (ranges or values) in front window
+		'sMapWindow becomes a string of MapBasic statements that can be used in a Run Command statement to duplicate a window
+		sMapWindow = WindowInfo(iMapWindowID, WIN_INFO_CLONEWINDOW)
+		iTheme = ExtractThematicValues(sMapWindow, iMapWindowID, sThemeLayer, sThemeCol, sValuesArray, sColorValsArray, sMaxValue, sDefaultColor)
+	Note iTheme + " + " + sThemeLayer
+		If iTheme > 0 And sThemeLayer = sTable2Export Then
+			lExportTheme = AskAgain("Do you want to export the thematic layer on " + sThemeLayer + "?", AppName)
+			If Not lExportTheme Then
+				sThemeLayer = ""
+				sThemeCol = ""
+				ReDim sValuesArray(0)
+				ReDim sColorValsArray(0)
+				sMaxValue = ""
+				sDefaultColor = ""
+			End If
+			Exit For
 		End If
-	End If
+	Next
 	
 	Dialog
 		Title "Layer Settings"
@@ -1278,6 +1330,7 @@ Dim sNewHTMLFilePath As String
 	
 	If sNewHTMLFilePath <> "" Then
 		sHTMLFilePath = sNewHTMLFilePath
+		sExportFolder = PathToDirectory$(sHTMLFilePath)
 		Alter Control ExpDlgETHTMLFilePathID Value sHTMLFilePath
 	End If
 
@@ -1730,12 +1783,23 @@ End Function
 
 '**************************************************************
 
-Function ExtractThematicValues(ByVal sMapWindow As String, sThemeLayer As String,
-	sThemeCol As String, sValueArray() As String, sColorValsArray() As String,
+Function ExtractThematicValues(ByVal sMapWindow As String, ByVal iMapWindowID As Integer, sThemeLayer As String,
+	sThemeCol As String, sValuesArray() As String, sColorValsArray() As String,
 	sMaxValue As String, sDefaultColor As String) As Integer
 
 Dim i, j, m, n, p, q, r As Integer
 Dim sRec As String
+
+'Reset Theme Values
+sThemeLayer = ""
+sThemeCol = ""
+ReDim sValuesArray(0)
+ReDim sColorValsArray(0)
+sMaxValue = ""
+sDefaultColor = ""
+
+
+Include "ReplacementStrings.mb"
 
 	ExtractThematicValues = -1
 	j = Len(sMapWindow)
@@ -1758,7 +1822,7 @@ Dim sRec As String
 			'layer name
 			p = InStr(1, sRec, "shade ")
 			q = InStr(p + 6, sRec, Chr$(32))
-			sThemeLayer = LayerInfo(FrontWindow(), Mid$(sRec, p + 6, q - (p + 6)), LAYER_INFO_NAME)
+			sThemeLayer = LayerInfo(iMapWindowID, Mid$(sRec, p + 6, q - (p + 6)), LAYER_INFO_NAME)
 			p = InStr(1, sThemeLayer, "(")
 			sThemeLayer = Left$(sThemeLayer, p - 1)
 
@@ -1773,14 +1837,21 @@ Dim sRec As String
 					sRec = LTrim$(sRec)
 					p = InStr(1, sRec, ":")
 					q = InStr(p + 2, sRec, Chr$(32))
-					r = UBound(sValueArray) + 1
-					ReDim sValueArray(r)
-					sValueArray(r) = Mid$(sRec, 1, p - 1)
+					r = UBound(sValuesArray) + 1
+					ReDim sValuesArray(r)
+					sValuesArray(r) = Mid$(sRec, 1, p - 1)
 					sMaxValue = Mid$(sRec, p + 2, q - (p + 2))
 
-					p = InStr(1, sRec, "(")
-					p = InStr(p, sRec, ",")
-					q = InStr(p + 1, sRec, ",")
+					If InStr(1, sRec, "Brush") > 0 Then
+						p = InStr(1, sRec, "(")
+						p = InStr(p, sRec, ",")
+						q = InStr(p + 1, sRec, ",")
+					ElseIf InStr(1, sRec, "Line") > 0 Then
+						p = InStr(1, sRec, "(")
+						p = InStr(p, sRec, ",")
+						p = InStr(p + 1, sRec, ",")
+						q = InStr(p + 1, sRec, ")")
+					End If
 					r = UBound(sColorValsArray) + 1
 					ReDim sColorValsArray(r)
 					sColorValsArray(r) = hexCol(Mid$(sRec, p + 1, q - (p + 1)))
@@ -1788,23 +1859,38 @@ Dim sRec As String
 					sRec = LTrim$(sRec)
 					p = InStr(1, sRec, Chr$(34))
 					q = InStr(p + 1, sRec, Chr$(34))
-					r = UBound(sValueArray) + 1
-					ReDim sValueArray(r)
-					sValueArray(r) = Mid$(sRec, p + 1, q - (p + 1))
+					r = UBound(sValuesArray) + 1
+					ReDim sValuesArray(r)
+					sValuesArray(r) = Mid$(sRec, p + 1, q - (p + 1))
+					sValuesArray(r) = ReplaceMultipleSubStrings(sValuesArray(r), tHTMLCharacters)
 					sMaxValue = ""
 
-					p = InStr(1, sRec, "(")
-					p = InStr(p, sRec, ",")
-					q = InStr(p + 1, sRec, ",")
+					If InStr(1, sRec, "Brush") > 0 Then
+						p = InStr(1, sRec, "(")
+						p = InStr(p, sRec, ",")
+						q = InStr(p + 1, sRec, ",")
+					ElseIf InStr(1, sRec, "Line") > 0 Then
+						p = InStr(1, sRec, "(")
+						p = InStr(p, sRec, ",")
+						p = InStr(p + 1, sRec, ",")
+						q = InStr(p + 1, sRec, ")")
+					End If
 					r = UBound(sColorValsArray) + 1
 					ReDim sColorValsArray(r)
 					sColorValsArray(r) = hexCol(Mid$(sRec, p + 1, q - (p + 1)))
 				End If
-				If InStr(1, sRec, "default Brush") > 0 Then
+				If InStr(1, sRec, "default") > 0 Then
 					sRec = LTrim$(sRec)
-					p = InStr(1, sRec, "(")
-					p = InStr(p, sRec, ",")
-					q = InStr(p + 1, sRec, ",")
+					If InStr(1, sRec, "Brush") > 0 Then
+						p = InStr(1, sRec, "(")
+						p = InStr(p, sRec, ",")
+						q = InStr(p + 1, sRec, ",")
+					ElseIf InStr(1, sRec, "Line") > 0 Then
+						p = InStr(1, sRec, "(")
+						p = InStr(p, sRec, ",")
+						p = InStr(p + 1, sRec, ",")
+						q = InStr(p + 1, sRec, ")")
+					End If
 					sDefaultColor = hexCol(Mid$(sRec, p + 1, q - (p + 1)))
 					Exit Do
 				End If
