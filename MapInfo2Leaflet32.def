@@ -3,7 +3,7 @@
 '**  
 '**  
 '**  Author:	Egge-Jan Pollé
-'**  Date:		27 October 2014
+'**  Date:		31 October 2014
 '**  Version:	AppVersion (see below)
 '************************************************************************************
 Include "MAPBASIC.DEF"
@@ -38,7 +38,7 @@ Declare Sub Bye
 Declare Sub LeafletWebsite
 Declare Sub AddIn_Help
 
-Declare Function IsPointLineOrPolygonTable(ByVal sTable As String) As Logical
+Declare Function IsPointLineOrPolygonTable(ByVal sTable As String) As Integer
 Declare Function LayerIsInMap(ByVal iWindowID As Integer, ByVal sLayerName As String) As Logical
 
 Declare Function ExtractThematicValues(ByVal sMapWindow As String, ByVal iMapWindowID As Integer, sThemeLayer As String, sThemeCol As String,

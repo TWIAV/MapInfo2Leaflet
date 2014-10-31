@@ -1,0 +1,5 @@
+[Link]
+Application=MapInfo2Leaflet32.mbx
+Module=MapInfo2Leaflet32Base.mbo
+Module=MapInfo2Leaflet32Export.mbo
+Module=MapInfo2Leaflet32Functions.mbo

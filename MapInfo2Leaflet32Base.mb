@@ -1,0 +1,107 @@
+'************************************************************************************
+'**  MapInfo2Leaflet32 (for the 'classic' 32 bit version MapInfo Professional 9.5 or higher)
+'**  Base Module
+'**  
+'**  Author:	Egge-Jan Pollé
+'**  Date:		31 October 2014
+'************************************************************************************
+Include "MapInfo2Leaflet32.def"
+
+'************************************************************************************
+Sub Main
+'************************************************************************************
+
+OnError Goto HandleError
+
+Dim sHelpMsg As String
+
+sDescription = "Export a MapInfo Table to a Web Map Application using Leaflet"
+
+	Create Menu AppNameMenu As
+		AppNameMenu
+		HelpMsg sDescription
+		Calling ExportDialog,
+		"(-",
+		"&About " + AppName
+		HelpMsg "Information about the application " + AppName
+		Calling About
+
+	'Remove the Window menu and Help menu
+	Alter Menu Bar Remove ID 6, ID 7
+	'Add the custom menu, then the Window & Help menus
+	Alter Menu Bar Add AppNameMenu, ID 6, ID 7
+
+	Create ButtonPad AppName As
+		PushButton
+			Icon 8001 File "MIPro2LFLTIcons.dll"
+			HelpMsg sDescription + "\n" + AppName
+			Calling ExportDialog
+		Show
+		Fixed
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub Main
+
+'************************************************************************************
+Sub About
+'************************************************************************************
+
+	Dialog 
+		Title "About " + AppName + " (Version " + AppVersion + ")" 
+		Control StaticText Title "With " + AppName + " you can export a MapInfo table to a web mapping application" Position 1dW, 1dH
+		Control StaticText Title "using Leaflet - the output consists of an html file, a js file (containing a GeoJSON" Position 1dW, 2dH
+		Control StaticText Title "FeatureCollection) and css files for the styling." Position 1dW, 3dH
+		Control StaticText Title "Leaflet is a modern open-source JavaScript library for mobile-friendly interactive maps." Position 1dW, 5dH
+		Control StaticText Title "More information:" Position 1dW, 7dH
+		Control Button Title "http://leafletjs.com/" Position 16dW, 7dH Calling LeafletWebsite
+		Control StaticText Title "This version is compatible with the 'classic' 32 bit version of MapInfo Professional" Position 1dW, 9.5dH
+		Control StaticText Title "(version 9.5 or higher)" Position 1dW, 10.5dH
+		Control StaticText Title Chr$(169) + " 2014 - TWIAV.NL" Position 48dW, 12dH
+		Control OKButton Title "&Exit" Calling Bye
+		Control CancelButton Title "&Cancel"
+		Control Button Title "&Help" Calling AddIn_Help
+
+End Sub About
+
+'*********************************************************************************************
+Sub Bye
+'*********************************************************************************************
+
+	Dim lFinished as Logical
+	
+	lFinished = AskAgain("Are you sure you want to remove the application " + AppName + "?", AppName)
+	
+	If Not lFinished Then
+		Dialog Preserve
+	Else
+		End Program
+	End if
+
+End Sub Bye
+
+'************************************************************************************
+Sub LeafletWebsite
+'************************************************************************************
+
+OnError Goto HandleError
+
+	Call OpenFileOrDir("http://leafletjs.com/")
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub LeafletWebsite
+
+'************************************************************************************
+ Sub AddIn_Help
+'************************************************************************************
+
+	Call OpenFileOrDir(ApplicationDirectory$() + "Documentation\MapInfo2Leaflet User Guide.pdf")
+
+End Sub AddIn_Help
