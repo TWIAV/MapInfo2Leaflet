@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Forms;
 using System.IO;
 using System.Text;
+using System.Drawing;
 
 // The MBExtensions Namespace
 namespace MBExtensions
@@ -120,23 +121,52 @@ namespace MBExtensions
 	// The MBColors class
 	class MBColors
 	{
-      public static string hexCol(int miColor)
-      {
-		int red;
-		int green;
-		int blue;
-		
-		red = miColor/65536;
-		green = (miColor - red*65536)/256;
-		blue = miColor - red*65536 - green*256;
-	  
-        System.Drawing.Color rgbColor = System.Drawing.Color.FromArgb(red, green, blue);
+		public static string hexCol(int miColor)
+		{
+			int red;
+			int green;
+			int blue;
+			
+			red = miColor/65536;
+			green = (miColor - red*65536)/256;
+			blue = miColor - red*65536 - green*256;
 
-		string hex = "#" + rgbColor.R.ToString("X2") + rgbColor.G.ToString("X2") + rgbColor.B.ToString("X2");
-         
-        return hex;
-      }
-    }
+			Color rgbColor = Color.FromArgb(red, green, blue);
+
+			string hex = "#" + rgbColor.R.ToString("X2") + rgbColor.G.ToString("X2") + rgbColor.B.ToString("X2");
+
+			return hex;
+		}
+		public static int colDlg(int miColor)
+		{
+			int red;
+			int green;
+			int blue;
+			
+			red = miColor/65536;
+			green = (miColor - red*65536)/256;
+			blue = miColor - red*65536 - green*256;
+
+			Color rgbColor = Color.FromArgb(red, green, blue);
+
+			ColorDialog cdlg = new ColorDialog();
+			cdlg.FullOpen = true;
+			cdlg.Color = rgbColor;
+			cdlg.CustomColors = new int[]{ColorToInt(rgbColor)};
+
+			if (cdlg.ShowDialog() == DialogResult.OK) {
+				red = cdlg.Color.R;
+				green = cdlg.Color.G;
+				blue = cdlg.Color.B;
+				return (red * 65536) + (green * 256) + blue;}
+			else
+				return -1;
+		}
+		private static int ColorToInt(Color color)
+		{
+			return (color.R) | (color.G << 8) | (color.B << 16);
+		}
+	}
 	// The MBDateAndTime class
 	class MBDateAndTime
 	{

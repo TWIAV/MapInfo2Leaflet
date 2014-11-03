@@ -3,7 +3,7 @@
 '**  
 '**  
 '**  Author:	Egge-Jan Pollé
-'**  Date:		31 October 2014
+'**  Date:		3 November 2014
 '**  Version:	AppVersion (see below)
 '************************************************************************************
 Include "MAPBASIC.DEF"
@@ -16,7 +16,11 @@ Declare Sub CreateWebMapApplication
 Declare Sub EnableLayerSelection
 Declare Sub ExpDlgOKBtnHandler
 Declare Sub LayerSettingsDialog
-Declare Sub StyleSettingsDialog
+Declare Sub ColorSettingsDialog
+Declare Sub PointStyleSettingsDialog
+Declare Sub SetPointStyleSettingsDlg
+Declare Sub PointStyleSettingChangeHandler
+Declare Sub ColorPicker
 Declare Sub CheckForHyperlinks
 Declare Sub RemoveHyperLink
 Declare Sub AddColNamesHandler
@@ -63,6 +67,7 @@ Declare Method Warn Class "MBExtensions.MBDialogs" Lib "MBExtensions.dll" (ByVal
 Declare Method BrowseForFolder Class "MBExtensions.MBDialogs" Lib "MBExtensions.dll" (ByVal sDescription As String, ByVal sFolder As String) As String
 Declare Method OpenFileOrDir Class "MBExtensions.MBFileManagement" Lib "MBExtensions.dll" (ByVal sOpen As String)
 Declare Method hexCol Class "MBExtensions.MBColors" Lib "MBExtensions.dll" (ByVal iMIColor As Integer) As String
+Declare Method colDlg Class "MBExtensions.MBColors" Lib "MBExtensions.dll" (ByVal iMIColor As Integer) As Integer
 
 ' /////     Class "MBExtensions.MBDateAndTime"     /////
 ' Allows you to retreive information from a MapBasic Date (i.e. YYYYMMDD) or
@@ -87,11 +92,11 @@ Declare Method RegionalWeekday
     Lib "MBExtensions.dll" (ByVal sDateString as string) As String
 
 Global sTitleWebsite, sExportFolder, sHTMLFilePath, sHTMLFilePathTmp, sGeoJSONFilePath, sGeoJSONFilePathTmp, sLayerNamePub, sLayerNameTech, sFeatureCollection As String
-Global sTableList(), sColumnsList(), sTable2Export, sDescription As String
+Global sTableList(), sColumnsList(), sTable2Export, sDescription, sLegendTitle, sLegendSubTitle, sMapTilte As String
 Global sColumnsListPopup(), sColumnsListNonPopup(), sHyperlink, sTooltipCol, sFitBounds, sDatasetBounds As String
-Global lAddColumnNames, lFirstColumnBold, lZoomInOnClick, lExportTheme As Logical
-Global iPointStyleSetting, iTarget, iTheme As Integer
-Global sThemeLayer, sThemeCol, sValuesArray(), sColorValsArray(), sMaxValue, sDefaultColor As String
+Global lAddColumnNames, lFirstColumnBold, lZoomInOnClick, lExportTheme, lMapTitle As Logical
+Global iPointStyleSetting, iTarget, iTheme, iMIColor, iPointShape, iPointSize As Integer
+Global sThemeLayer, sThemeCol, sValuesArray(), sColorValsArray(), sMaxValue, sDefaultColor, sObjectColor As String
 
 Type tColumn2Export
 	sColName As String
@@ -114,7 +119,7 @@ Declare Function ReplaceMultipleSubStrings(	'Function similar to the function Re
 
 Define AppName "MapInfo2Leaflet"
 Define AppNameMenu "MapInfo&2Leaflet"
-Define AppVersion "0.30"
+Define AppVersion "0.35"
 
 'Defining Dialog Width and Height
 'This allows you to specify width and height clauses in terms of characters (i.e., Width 30dW, Height 10dH).
@@ -138,7 +143,8 @@ Define ExpDlgETTitleWebPageID		661
 Define ExpDlgSTHTMLFileID			662
 Define ExpDlgBtnSetHTMLFilePathID	663
 Define ExpDlgETHTMLFilePathID		664
-Define ExpDlgBtnStyleSetID			665
+Define ExpDlgBtnPointStyleSetID		665
+Define ExpDlgBtnSetColorID			666
 Define ExpDlgOKBtnID				671
 Define ExpDlgCancelBtnID			681
 
@@ -163,3 +169,15 @@ Define LSDlgCBZmClckID			732
 Define LSDlgSTTTipID			735
 Define LSDlgPUMTTipID			736
 Define LSDlgOKBtnID				741
+
+'Control IDs in Style Settings Dialog
+Define PSDlgRGPointStyleID		801
+Define PSDlgSTExpl1ID			802
+Define PSDlgSTExpl2ID			803
+Define PSDlgGBdivIconID			804
+Define PSDlgSTShapeID			805
+Define PSDlgRGShapeID			806
+Define PSDlgSTSizeID				807
+Define PSDlgPUMSizeID			808
+Define PSDlgBTnPickColorID		809
+Define PSDlgSTHexColID			810

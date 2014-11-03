@@ -3,7 +3,7 @@
 '**  Export Module
 '**  
 '**  Author:	Egge-Jan Pollé
-'**  Date:		31 October 2014
+'**  Date:		3 November 2014
 '************************************************************************************
 Include "MapInfo2Leaflet32.def"
 
@@ -44,7 +44,8 @@ OnError Goto HandleError
 		Control Button Title "..." Width 4dW Position 3dW, 9.25dH Disable ID ExpDlgBtnSetHTMLFilePathID Calling SetHTMLFilePath
 		Control EditText Position 8dW, 9.5dH Width 70dW Disable ID ExpDlgETHTMLFilePathID
 
-		Control Button Title "Set &Style Settings" Position 50dW, 11.5dH Disable ID ExpDlgBtnStyleSetID Calling StyleSettingsDialog
+		Control Button Title "Set &Point Style Settings" Position 50dW, 11.5dH Hide ID ExpDlgBtnPointStyleSetID Calling PointStyleSettingsDialog
+		Control Button Title "Set Colo&r" Position 50dW, 11.5dH Hide ID ExpDlgBtnSetColorID Calling ColorSettingsDialog
 
 		Control StaticText Title "PROCEDURE:" Position 3dW, 11.5dH
 		Control StaticText Title "Step 1: Select Table to Export" Position 3dW, 13dH
@@ -294,6 +295,14 @@ Print #2, Chr$(9) + "<link rel=" + Chr$(34) + "stylesheet" + Chr$(34) + " href="
 Print #2, Chr$(9) + "<link rel=" + Chr$(34) + "stylesheet" + Chr$(34) + " href=" + Chr$(34) + "leaflet-plugins/leaflet-search.min.css" + Chr$(34) + " />"
 Print #2, Chr$(9) + "<link rel=" + Chr$(34) + "stylesheet" + Chr$(34) + " href=" + Chr$(34) + "css/page.css" + Chr$(34) + " />"
 Print #2, Chr$(9) + "<link rel=" + Chr$(34) + "stylesheet" + Chr$(34) + " href=" + Chr$(34) + "css/mapinfo.css" + Chr$(34) + " />"
+Print #2, Chr$(9) + "<style>"
+Print #2, Chr$(9) + Chr$(9) + ".miDivIcon {"
+Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "border: 3px solid #F8F8F8;"
+If iPointShape = 1 Then
+	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "border-radius: 50%;"
+End If
+Print #2, Chr$(9) + Chr$(9) + "}"
+Print #2, Chr$(9) + "</style>"
 Print #2, "</head>"
 Print #2, "<body>"
 Print #2, Chr$(9) + "<header>"
@@ -393,15 +402,15 @@ If lExportTheme Then
 	Print #2
 	
 	sBorderLineWeightValuePolygon = "1"
-	sBorderColorValuePolygon = "'#c0c0c0'" 'Silver
+	sBorderColorValuePolygon = "'#C0C0C0'" 'Silver
 	sFillOpacityValuePolygon = "0.8"
 	sFillColorValuePolygon = "getColor(feature.properties." + LCase$(ReplaceMultipleSubStrings(sThemeCol, tAccentuatedCharacters)) + ")"
 	
 Else
 	sBorderLineWeightValuePolygon = "2"
-	sBorderColorValuePolygon = "'#ff0000'"
+	sBorderColorValuePolygon = "'" + sObjectColor + "'"
 	sFillOpacityValuePolygon = "0.05"
-	sFillColorValuePolygon = "'#ff0000'"
+	sFillColorValuePolygon = "'" + sObjectColor + "'"
 End If
 
 'Styling
@@ -426,7 +435,14 @@ Do Case iGeoJSONLayerType
 
 			sIconValue = "divIcon" + sLayerNo
 
-			Print #2, Chr$(9) + Chr$(9) + "var " + sIconValue + " = L.divIcon({className: 'miMarker'});"
+			Print #2, Chr$(9) + Chr$(9) + "var " + sIconValue + " = L.divIcon({"
+			
+			If iPointSize <> 12 Then
+				Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "iconSize: new L.Point(" + iPointSize + ", " + iPointSize + "),"
+			End If
+			Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "background: " + sFillColorValuePolygon + ","
+			Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "className: 'miDivIcon'"
+			Print #2,  Chr$(9) + Chr$(9) + "});"
 			
 		End If
 
@@ -558,7 +574,7 @@ If lExportTheme Then
 	Print #2
 	Print #2, Chr$(9) + Chr$(9) + "legend.onAdd = function (map) {"
 	Print #2
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "var div = L.DomUtil.create('div', 'info legend'),"
+	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "var div = L.DomUtil.create('div', 'title legend'),"
 
 	Do Case iTheme
 	
@@ -580,7 +596,16 @@ If lExportTheme Then
 		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "// loop through the intervals and generate a label with a colored square for each"
 		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "for (var i = 0; i < ranges.length; i++) {"
 		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "div.innerHTML +="
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "'<i style=" + Chr$(34) + "background:' + getColor(ranges[i] + 1) + '" + Chr$(34) + "></i> ' +"
+		Do Case iGeoJSONLayerType
+			Case GeoJSONPointLayer
+				Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) +
+				"'<div class=" + Chr$(34) + "miDivIcon" + Chr$(34) + " style=" + Chr$(34) + "background:' + getColor(ranges[i] + 1) + 'width: " +
+				iPointSize + "px; height: " + iPointSize + "px; display: inline-block; margin-right: 5px;" + Chr$(34) + "></div>' +"
+			Case GeoJSONLineStringLayer
+				Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "'<hr style=" + Chr$(34) + "color:' + getColor(ranges[i] + 1) + '" + Chr$(34) + ">' +"
+			Case GeoJSONPolygonLayer
+				Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "'<i style=" + Chr$(34) + "background:' + getColor(ranges[i] + 1) + '" + Chr$(34) + "></i> ' +"
+		End Case
 		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "ranges[i] + (ranges[i + 1] ? '&ndash;' + ranges[i + 1] + '<br>' : '&ndash;' + maxValue);"
 		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "}"
 
@@ -601,19 +626,43 @@ If lExportTheme Then
 		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "// loop through the intervals and generate a label with a colored square for each"
 		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "for (var i = 0; i < values.length; i++) {"
 		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "div.innerHTML +="
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "'<i style=" + Chr$(34) + "background:' + getColor(values[i]) + '" + Chr$(34) + "></i> ' +"
+		Do Case iGeoJSONLayerType
+			Case GeoJSONPointLayer
+				Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) +
+				"'<div class=" + Chr$(34) + "miDivIcon" + Chr$(34) + " style=" + Chr$(34) + "background:' + getColor(values[i]) + 'width: " +
+				iPointSize + "px; height: " + iPointSize + "px; display: inline-block; margin-right: 5px;" + Chr$(34) + "></div>' +"
+			Case GeoJSONLineStringLayer
+				Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "'<hr style=" + Chr$(34) + "color:' + getColor(values[i]) + '" + Chr$(34) + ">' +"
+			Case GeoJSONPolygonLayer
+				Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "'<i style=" + Chr$(34) + "background:' + getColor(values[i]) + '" + Chr$(34) + "></i>' +"
+		End Case
 		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "values[i] + '<br>';"
 		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "}"
 
 	End Case
 
 	Print #2
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "div.innerHTML = '<b>Title</b><br>Sub Title<br>' + div.innerHTML;"
+	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "div.innerHTML = '<b>" + sLegendTitle + "</b><br>" + sLegendSubTitle + "<br>' + div.innerHTML;"
 	Print #2
 	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "return div;"
 	Print #2, Chr$(9) + Chr$(9) + "};"
 	Print #2
 	Print #2, Chr$(9) + Chr$(9) + "legend.addTo(map);"
+	Print #2
+End If
+If lMapTitle Then
+	Print #2, Chr$(9) + Chr$(9) + "var title = L.control({position: 'bottomleft'});"
+	Print #2
+	Print #2, Chr$(9) + Chr$(9) + "title.onAdd = function (map) {"
+	Print #2
+	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "var div = L.DomUtil.create('div', 'title');"
+	Print #2
+	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "div.innerHTML = '<b>" + sMapTilte + "</b>';"
+	Print #2
+	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "return div;"
+	Print #2, Chr$(9) + Chr$(9) + "};"
+	Print #2
+	Print #2, Chr$(9) + Chr$(9) + "title.addTo(map);"
 	Print #2
 End If
 Print #2, Chr$(9) + "</script>"
@@ -675,6 +724,12 @@ Dim i As Integer
 Dim fX1, fY1, fX2, fY2, fX1ds, fY1ds, fX2ds, fY2ds, fX1mw, fY1mw, fX2mw, fY2mw As Float
 Dim oMapWindow, oDataset As Object
 
+'Temporary
+sLegendTitle = "Title"
+sLegendSubTitle = "Sub title"
+lMapTitle = TRUE
+sMapTilte = "Map Title"
+
 	sFitBounds = ""
 	sDatasetBounds = ""
 
@@ -683,6 +738,8 @@ Dim oMapWindow, oDataset As Object
 		If NoOfColumns(sTable2Export, sColumnsList) > 0 Then
 			Alter Control ExpDlgBtnLaySetID Enable
 			Alter Control ExpDlgSTStep2ID Enable
+			Alter Control ExpDlgBtnPointStyleSetID Hide
+			Alter Control ExpDlgBtnSetColorID Hide
 			sHTMLFilePath = sExportFolder + sTable2Export + ".html"
 			sHTMLFilePathTmp = sExportFolder + sTable2Export + "_tmp.html"
 			sGeoJSONFilePath = sExportFolder + "js\" + sTable2Export + ".js"
@@ -760,7 +817,8 @@ Dim oMapWindow, oDataset As Object
 		Alter Control ExpDlgETHTMLFilePathID Value sHTMLFilePath Disable
 		sTitleWebsite = ""
 		Alter Control ExpDlgETTitleWebPageID Value sTitleWebsite Disable
-		Alter Control ExpDlgBtnStyleSetID Disable
+		Alter Control ExpDlgBtnPointStyleSetID Hide
+		Alter Control ExpDlgBtnSetColorID Hide
 		Alter Control ExpDlgSTTitleWebPageID Disable
 		Alter Control ExpDlgSTHTMLFileID Disable
 		Alter Control ExpDlgBtnSetHTMLFilePathID Disable
@@ -822,7 +880,6 @@ Dim i, iMapWindowID As Integer
 		'sMapWindow becomes a string of MapBasic statements that can be used in a Run Command statement to duplicate a window
 		sMapWindow = WindowInfo(iMapWindowID, WIN_INFO_CLONEWINDOW)
 		iTheme = ExtractThematicValues(sMapWindow, iMapWindowID, sThemeLayer, sThemeCol, sValuesArray, sColorValsArray, sMaxValue, sDefaultColor)
-	Note iTheme + " + " + sThemeLayer
 		If iTheme > 0 And sThemeLayer = sTable2Export Then
 			lExportTheme = AskAgain("Do you want to export the thematic layer on " + sThemeLayer + "?", AppName)
 			If Not lExportTheme Then
@@ -876,10 +933,19 @@ Dim i, iMapWindowID As Integer
 			Alter Control ExpDlgSTTitleWebPageID Enable
 			Alter Control ExpDlgSTHTMLFileID Enable
 			Alter Control ExpDlgBtnSetHTMLFilePathID Enable
-			Alter Control ExpDlgBtnStyleSetID Enable
+			If IsPointLineOrPolygonTable(sTable2Export) = 1 Then
+				Alter Control ExpDlgBtnPointStyleSetID Show
+				Alter Control ExpDlgSTStep5ID Enable Title "Set Point Style Settings"
+			ElseIf IsPointLineOrPolygonTable(sTable2Export) In (2,3) Then
+				If lExportTheme Then
+					Alter Control ExpDlgSTStep5ID Enable Title "Thematic colors will be used."
+				Else
+					Alter Control ExpDlgBtnSetColorID Show
+					Alter Control ExpDlgSTStep5ID Enable Title "Set Color"
+				End If
+			End If
 			Alter Control ExpDlgSTStep3ID Enable
 			Alter Control ExpDlgSTStep4ID Enable
-			Alter Control ExpDlgSTStep5ID Enable
 			Alter Control ExpDlgSTStep6ID Enable
 			Alter Control ExpDlgOKBtnID Enable
 		End If
@@ -892,15 +958,16 @@ HandleError:
 End Sub LayerSettingsDialog
 
 '************************************************************************************
-Sub StyleSettingsDialog
+Sub ColorSettingsDialog
 '************************************************************************************
 
 OnError Goto HandleError
 
 	Dialog
-		Title "Style Settings"
-		Control StaticText Title "For Point Data:"
-		Control RadioGroup Title "Use &Icon from File; Use &divIcon" Value iPointStyleSetting Into iPointStyleSetting
+		Title "Set Color for LineStrings and Polygons"
+		Control Button Title "&Pick Color" Position 3dW, 1dH Calling ColorPicker
+		Control StaticText Title "Current Color: " + sObjectColor Position 16dW, 1.25dH ID PSDlgSTHexColID
+		
 		Control OKButton Title "&OK"
 		Control CancelButton Title "&Cancel"
 		Control Button Title "&Help" Calling AddIn_Help
@@ -910,7 +977,139 @@ Exit Sub
 HandleError:
 	Note Error$()
 
-End Sub StyleSettingsDialog
+End Sub ColorSettingsDialog
+
+'************************************************************************************
+Sub PointStyleSettingsDialog
+'************************************************************************************
+
+OnError Goto HandleError
+
+Dim sPointSizeArray(21) As String
+Dim i, iPointSizeFromArrary As Integer
+
+
+For i = 5 to 25
+	sPointSizeArray(i-4) = i
+Next
+
+iPointSizeFromArrary = iPointSize - 4
+
+	Dialog
+		Title "Point Style Settings"
+		Calling SetPointStyleSettingsDlg
+		Control RadioGroup Title "Use &Icon from File*; Use &divIcon" Value iPointStyleSetting Into iPointStyleSetting Position 2dW, 1dH ID PSDlgRGPointStyleID Calling PointStyleSettingChangeHandler
+		Control StaticText Title "*Default blue-arrow.png will be used." Position 2dW, 5dH ID PSDlgSTExpl1ID
+		Control StaticText Title "Manually edit output html to use your own icon from file." Position 2dW, 6dH ID PSDlgSTExpl2ID
+		Control GroupBox Title "divIcon" Position 2dW, 8dH Width 48dW Height 10dH ID PSDlgGBdivIconID
+		Control StaticText Title "Shape:" Position 3dW, 9.5dH ID PSDlgSTShapeID
+		Control RadioGroup Title "Ci&rcle; &Square" Value iPointShape Into iPointShape Position 3dW, 11dH ID PSDlgRGShapeID
+		Control StaticText Title "Size (pixels):" Position 17dW, 9.5dH ID PSDlgSTSizeID
+		Control PopUpMenu Title From Variable sPointSizeArray Value iPointSizeFromArrary Into iPointSizeFromArrary Position 17dW, 11dH ID PSDlgPUMSizeID
+		Control Button Title "&Pick Color" Position 3dW, 15.5dH ID PSDlgBTnPickColorID Calling ColorPicker
+		Control StaticText Title "Thematic colors will be used." Position 16dW, 15.75dH ID PSDlgSTHexColID
+		
+		Control OKButton Title "&OK"
+		Control CancelButton Title "&Cancel"
+		Control Button Title "&Help" Calling AddIn_Help
+
+		If CommandInfo(CMD_INFO_DLG_OK) Then
+			iPointSize = iPointSizeFromArrary + 4
+		End If
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub PointStyleSettingsDialog
+
+'************************************************************************************
+Sub SetPointStyleSettingsDlg
+'************************************************************************************
+
+OnError Goto HandleError
+
+	If lExportTheme Then
+		iPointStyleSetting = 2
+		Alter Control PSDlgRGPointStyleID Disable Value iPointStyleSetting
+	End If
+
+	If iPointStyleSetting = 1 Then
+		Alter Control PSDlgSTExpl1ID Title "*Default blue-arrow.png will be used."
+		Alter Control PSDlgSTExpl2ID Title "Manually edit output html to use your own icon from file."
+		Alter Control PSDlgGBdivIconID Disable
+		Alter Control PSDlgSTShapeID Disable
+		Alter Control PSDlgRGShapeID Disable
+		Alter Control PSDlgSTSizeID Disable
+		Alter Control PSDlgPUMSizeID Disable
+		Alter Control PSDlgBTnPickColorID Disable
+		Alter Control PSDlgSTHexColID Title ""
+	ElseIf iPointStyleSetting = 2 Then
+		Alter Control PSDlgSTExpl1ID Title ""
+		Alter Control PSDlgSTExpl2ID Title ""
+		Alter Control PSDlgGBdivIconID Enable
+		Alter Control PSDlgSTShapeID Enable
+		Alter Control PSDlgRGShapeID Enable
+		Alter Control PSDlgSTSizeID Enable
+		Alter Control PSDlgPUMSizeID Enable
+		If Not lExportTheme Then
+			Alter Control PSDlgBTnPickColorID Enable
+			Alter Control PSDlgSTHexColID Title "Current Color: " + sObjectColor
+		Else
+			Alter Control PSDlgBTnPickColorID Disable
+			Alter Control PSDlgSTHexColID Title "Thematic colors will be used."
+		End If
+	End If
+	
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub SetPointStyleSettingsDlg
+
+'************************************************************************************
+Sub PointStyleSettingChangeHandler
+'************************************************************************************
+
+OnError Goto HandleError
+
+	iPointStyleSetting = ReadControlValue(PSDlgRGPointStyleID)
+	Call SetPointStyleSettingsDlg
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub PointStyleSettingChangeHandler
+
+'************************************************************************************
+Sub ColorPicker
+'************************************************************************************
+
+OnError Goto HandleError
+
+Dim iColor As Integer
+
+	iColor =  colDlg(iMIColor)
+
+	If iColor >= 0 Then
+		iMIColor = iColor
+	End If
+
+	sObjectColor = hexCol(iMIColor)
+	
+	Alter Control PSDlgSTHexColID Title "Current Color: " + sObjectColor
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub ColorPicker
 
 '************************************************************************************
 Sub LSDlgOKBtnHandler

@@ -3,7 +3,7 @@
 '**  
 '**  
 '**  Author:	Egge-Jan Pollé
-'**  Date:		31 October 2014
+'**  Date:		3 November 2014
 '************************************************************************************
 Include "MapInfo2Leaflet32.def"
 
@@ -206,7 +206,7 @@ Function ExtractThematicValues(ByVal sMapWindow As String, ByVal iMapWindowID As
 	sThemeCol As String, sValuesArray() As String, sColorValsArray() As String,
 	sMaxValue As String, sDefaultColor As String) As Integer
 
-Dim i, j, m, n, p, q, r As Integer
+Dim i, j, m, n, p, q, r, iThematic As Integer
 Dim sRec As String
 
 'Reset Theme Values
@@ -232,8 +232,10 @@ Include "ReplacementStrings.mb"
 		If Left$(sRec, 5) = "shade" Then
 			If InStr(1, sRec, "ranges") > 0 Then
 				ExtractThematicValues = 1
+				iThematic = 1
 			ElseIf InStr(1, sRec, "values") > 0 Then
 				ExtractThematicValues = 2
+				iThematic = 2
 			Else
 				Exit Do
 			End If
@@ -252,7 +254,7 @@ Include "ReplacementStrings.mb"
 
 			' gather up all the lines in the shade clause
 			Do While n < j
-				If InStr(1, sRec, ":") > 0 Then
+				If iThematic = 1 And InStr(1, sRec, ":") > 0 Then
 					sRec = LTrim$(sRec)
 					p = InStr(1, sRec, ":")
 					q = InStr(p + 2, sRec, Chr$(32))
@@ -261,7 +263,7 @@ Include "ReplacementStrings.mb"
 					sValuesArray(r) = Mid$(sRec, 1, p - 1)
 					sMaxValue = Mid$(sRec, p + 2, q - (p + 2))
 
-					If InStr(1, sRec, "Brush") > 0 Then
+					If InStr(1, sRec, "Brush") > 0 Or InStr(1, sRec, "Symbol") > 0 Then
 						p = InStr(1, sRec, "(")
 						p = InStr(p, sRec, ",")
 						q = InStr(p + 1, sRec, ",")
@@ -274,7 +276,7 @@ Include "ReplacementStrings.mb"
 					r = UBound(sColorValsArray) + 1
 					ReDim sColorValsArray(r)
 					sColorValsArray(r) = hexCol(Mid$(sRec, p + 1, q - (p + 1)))
-				ElseIf InStr(1, sRec, Chr$(34)) > 0 Then
+				ElseIf iThematic = 2 And InStr(1, sRec, Chr$(34)) > 0 Then
 					sRec = LTrim$(sRec)
 					p = InStr(1, sRec, Chr$(34))
 					q = InStr(p + 1, sRec, Chr$(34))
@@ -284,7 +286,7 @@ Include "ReplacementStrings.mb"
 					sValuesArray(r) = ReplaceMultipleSubStrings(sValuesArray(r), tHTMLCharacters)
 					sMaxValue = ""
 
-					If InStr(1, sRec, "Brush") > 0 Then
+					If InStr(1, sRec, "Brush") > 0 Or InStr(1, sRec, "Symbol") > 0 Then
 						p = InStr(1, sRec, "(")
 						p = InStr(p, sRec, ",")
 						q = InStr(p + 1, sRec, ",")
@@ -300,7 +302,7 @@ Include "ReplacementStrings.mb"
 				End If
 				If InStr(1, sRec, "default") > 0 Then
 					sRec = LTrim$(sRec)
-					If InStr(1, sRec, "Brush") > 0 Then
+					If InStr(1, sRec, "Brush") > 0 Or InStr(1, sRec, "Symbol") > 0 Then
 						p = InStr(1, sRec, "(")
 						p = InStr(p, sRec, ",")
 						q = InStr(p + 1, sRec, ",")

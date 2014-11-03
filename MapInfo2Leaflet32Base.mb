@@ -3,7 +3,7 @@
 '**  Base Module
 '**  
 '**  Author:	Egge-Jan Pollé
-'**  Date:		31 October 2014
+'**  Date:		3 November 2014
 '************************************************************************************
 Include "MapInfo2Leaflet32.def"
 
@@ -38,6 +38,11 @@ sDescription = "Export a MapInfo Table to a Web Map Application using Leaflet"
 			Calling ExportDialog
 		Show
 		Fixed
+		
+	iMIColor = RED
+	sObjectColor = hexCol(iMIColor)
+	iPointShape = 1
+	iPointSize = 12
 
 Exit Sub
 '---------------------------
