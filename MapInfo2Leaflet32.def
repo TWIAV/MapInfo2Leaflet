@@ -3,7 +3,7 @@
 '**  
 '**  
 '**  Author:	Egge-Jan Pollé
-'**  Date:		3 November 2014
+'**  Date:		4 November 2014
 '**  Version:	AppVersion (see below)
 '************************************************************************************
 Include "MAPBASIC.DEF"
@@ -22,7 +22,9 @@ Declare Sub SetPointStyleSettingsDlg
 Declare Sub PointStyleSettingChangeHandler
 Declare Sub ColorPicker
 Declare Sub CheckForHyperlinks
+Declare Sub EnableThematicLegendOptions
 Declare Sub RemoveHyperLink
+Declare Sub MapTitleHandler
 Declare Sub AddColNamesHandler
 Declare Sub NonAddedColumnsHandler
 Declare Sub AddedColumnsHandler
@@ -149,11 +151,14 @@ Define ExpDlgOKBtnID				671
 Define ExpDlgCancelBtnID			681
 
 'Control IDs in Layer Settings Dialog
-Define LSDlgETLNameID			701
-Define LSDlgLBLayersNotAddedID	702
-Define LSDlgCBAddColNmID		703
-Define LSDlgCBCol1BoldID		704
-Define LSDlgLBLayersAddedID		705	
+Define LSDlgCBMTitleID			701
+Define LSDlgETMTitleID			702
+Define LSDlgETLNameID			704
+Define LSDlgLBLayersNotAddedID	705
+Define LSDlgGBPopupID			706
+Define LSDlgCBAddColNmID		707
+Define LSDlgCBCol1BoldID		708
+Define LSDlgLBLayersAddedID		709
 Define LSDlgBtnAddID			711
 Define LSDlgBtnAddAllID			712
 Define LSDlgBtnRemID			713
@@ -168,7 +173,12 @@ Define LSDlgBtnRemHLID			731
 Define LSDlgCBZmClckID			732
 Define LSDlgSTTTipID			735
 Define LSDlgPUMTTipID			736
-Define LSDlgOKBtnID				741
+Define LSDlgGBThemeTitlesID		741
+Define LSDlgSTLTtlID			742
+Define LSDlgETLTtlID			743
+Define LSDlgSTLSTtlID			744
+Define LSDlgETLSTtlID			745
+Define LSDlgOKBtnID				751
 
 'Control IDs in Style Settings Dialog
 Define PSDlgRGPointStyleID		801
@@ -177,7 +187,7 @@ Define PSDlgSTExpl2ID			803
 Define PSDlgGBdivIconID			804
 Define PSDlgSTShapeID			805
 Define PSDlgRGShapeID			806
-Define PSDlgSTSizeID				807
+Define PSDlgSTSizeID			807
 Define PSDlgPUMSizeID			808
 Define PSDlgBTnPickColorID		809
 Define PSDlgSTHexColID			810

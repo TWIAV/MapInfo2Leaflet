@@ -20,7 +20,7 @@
 .legend i {
 	width: 32px;
 	height: 16px;
-	border: 1px solid #DCDCDC;
+	border: 1px solid #C0C0C0;
 	float: left;
 	margin-right: 8px;
 }
@@ -30,6 +30,11 @@
 	margin-right: 5px;
 	border-style: solid;
 	border-width: 3px 16px;
+}
+.legend .circle {
+	border-radius: 50%;
+	width: 16px;
+	height: 16px;
 }
 .title {
 	padding: 6px 8px;

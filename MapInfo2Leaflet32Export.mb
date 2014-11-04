@@ -52,7 +52,7 @@ OnError Goto HandleError
 		Control StaticText Title "Step 2: Set Layer Settings" Position 3dW, 14.5dH Disable ID ExpDlgSTStep2ID
 		Control StaticText Title "Step 3: Set Title for Web Page" Position 3dW, 16dH Disable ID ExpDlgSTStep3ID
 		Control StaticText Title "Step 4: Set html file" Position 3dW, 17.5dH Disable ID ExpDlgSTStep4ID
-		Control StaticText Title "Step 5: Set Style Settings" Position 3dW, 19dH Disable ID ExpDlgSTStep5ID
+		Control StaticText Title "Step 5: Set Style Settings" + Space$(30) Position 3dW, 19dH Disable ID ExpDlgSTStep5ID
 		Control StaticText Title "Step 6: Click OK to Export" Position 3dW, 20.5dH Disable ID ExpDlgSTStep6ID
 	
 		Control OKButton Title "&OK" Disable ID ExpDlgOKBtnID Calling ExpDlgOKBtnHandler
@@ -72,648 +72,6 @@ HandleError:
 
 End Sub ExportDialog
 
-'************************************************************************************
-Sub CreateWebMapApplication
-'************************************************************************************
-
-OnError Goto HandleError
-
-Dim i, j, k, m, iNumRows, iObjectType, iGeoJSONLayerType As Integer
-Dim fX, fY As Float
-Dim aColj, aObjCol As Alias
-Dim sString, sPopUpString, sColumnText, sValue, sCurDate, sStyleValue, sIconValue, sZoomToFeatureFunction,
-	sStyleFunction, sHighlightFeatureFunction, sResetHighlightFunction, sOnEachFeatureFunction, sGeoJSONGeomObjType, sCoordinates,
-	sOptionHighLighting, sFeatureString, sCrsString, sLayerNo, sPropertiesString, sTargetText, sThemeColoring, sBorderLineWeightValuePolygon,
-	sBorderColorValuePolygon, sFillColorValuePolygon, sFillOpacityValuePolygon, sRanges, sValues As String
-Dim oTmpObject As Object
-
-Include "ReplacementStrings.mb"
-
-	sCurDate = CurDate()
-	sCurDate = RegionalLongDate(sCurDate)
-
-'---------------------------------------
-Call CreateDir(sExportFolder + "js")
-Open File sGeoJSONFilePathTmp For Output Access Write As #1 CharSet SystemInfo(SYS_INFO_CHARSET)'"WindowsLatin1"
-Open File sHTMLFilePathTmp For Output Access Write As #2 CharSet SystemInfo(SYS_INFO_CHARSET)'"WindowsLatin1"
-OnError Goto HandleErrorDuringFileCreation
-
-'--------------------------------------------------------------------------
-' SOME USEFUL NOTES ON INCLUDING HTML CONTENT IN A (GEO)JSON DATA STRUCTURE
-'--------------------------------------------------------------------------
-' The JSON spec does not have many restrictions. JSON data is either a string, a number, a boolean, an object, an array, or null. As long as your data is formatted as one of these types, it should be valid. However, if your data contains HTML, there are certain things that you need to do to keep the browser happy when using your JSON data within Javascript.
-'
-' 1. Escape quotation marks used around HTML attributes like so <img src=\"someimage.png\"/>
-' 2. Escape the forward slash in HTML end tags. <div>Hello World!<\/div>. This is an ancient artifact of an old HTML spec that didn’t want html parsers to get confused when putting strings in a <SCRIPT> tag. For some reason, today’s browsers still like it.
-' 3. This one was totally bizarre. You should include a space between the tag name and the slash on self closing tags. I have no idea why this is, but on MOST modern browsers, if you try using javascript to append a <li> tag as a child of an unordered list that is formatted like so: <ul/>, it won’t work. It gets added to the DOM after the ul tag. But, if the code looks like this: <ul /> (notice the space after the /), everything works fine. Very strange indeed.
-' 4. Be sure to encode any quotation marks that might be included in (bad) HTML content. This is the only thing that would really break the JSON by accidentally terminating the string early. Any " characters should be encoded as &quot; if it is meant to be included as HTML content.
-'
-' Source: http://www.thorntech.com/2012/07/4-things-you-must-do-when-putting-html-in-json/
-'--------------------------------------------------------------------------
-' Populate the GeoJSON/Javascript file first with a FeatureCollection
-'--------------------------------------------------------------------------
-Print #1, "//Table: " + sTable2Export + ".TAB (exported from MapInfo Professional using " + AppName + ".MBX)" 
-Print #1, "//Date: " + sCurDate
-Print #1, "var " + sFeatureCollection + " = {" + Chr$(34) + "type" + Chr$(34) + ":" + Chr$(34) + "FeatureCollection" + Chr$(34) + "," + Chr$(34) + "features" + Chr$(34) + ": ["
-
-iNumRows = TableInfo(sTable2Export, TAB_INFO_NROWS)
-
-For i = 1 to iNumRows
-	Fetch Rec i From sTable2Export
-	sPropertiesString = ""
-	If lAddColumnNames Then
-		sPopUpString = "<table class = " + Chr$(92) + Chr$(34) + "miPopupTable" + Chr$(92) + Chr$(34) + ">"
-	Else
-		sPopUpString = ""
-	End If
-	sTooltipCol = LCase$(ReplaceMultipleSubStrings(sTooltipCol, tAccentuatedCharacters))
-	For j = 1 to UBound(Columns2Export)
-		sColumnText = ""
-		aColj = sTable2Export + "." + Columns2Export(j).sColName
-		sValue = aColj
-		If sValue = "" Then
-			Goto NextLabel
-		End If
-
-		sPropertiesString = sPropertiesString + Chr$(34) + LCase$(ReplaceMultipleSubStrings(Columns2Export(j).sColName, tAccentuatedCharacters)) + Chr$(34) +":"
-		
-		Do Case ColumnInfo(sTable2Export, Columns2Export(j).sColName, COL_INFO_TYPE)
-
-			Case COL_TYPE_DECIMAL, COL_TYPE_FLOAT, COL_TYPE_INTEGER, COL_TYPE_SMALLINT
-				sPropertiesString = sPropertiesString + sValue + ","
-			Case COL_TYPE_LOGICAL
-				If sValue = "T" Then
-					sPropertiesString = sPropertiesString + "true,"
-				Else
-					sPropertiesString = sPropertiesString + "false,"
-				End If
-			Case Else
-				sPropertiesString = sPropertiesString + Chr$(34) + sValue + Chr$(34) + ","
-
-		End Case
-
-		If Columns2Export(j).lInToolTip Then
-			If ColumnInfo(sTable2Export, Columns2Export(j).sColName, COL_INFO_TYPE) = COL_TYPE_CHAR Then
-				sValue = ReplaceMultipleSubStrings(sValue, tHTMLCharacters)
-			End If
-			If lAddColumnNames Then
-				sColumnText = ReplaceSubStringWith(Columns2Export(j).sColName, Chr$(95), Chr$(32)) + "<" + Chr$(92) + "/td><td>"
-			End If
-			If Columns2Export(j).lHyperlink And LooksLikeURL(sValue) Then
-				If iTarget = 2 Then
-					sTargetText = " target=" + Chr$(92) + Chr$(34) + "_blank" + Chr$(92) + Chr$(34)
-				Else
-					sTargetText = ""
-				End If
-				sColumnText = sColumnText + "<a href=" + Chr$(92) + Chr$(34) + sValue + Chr$(92) + Chr$(34) + sTargetText + ">"
-				aColj = sTable2Export + "." + Columns2Export(j).sAlias
-				sValue = aColj
-				If ColumnInfo(sTable2Export, Columns2Export(j).sAlias, COL_INFO_TYPE) = COL_TYPE_CHAR Then
-					sValue = ReplaceMultipleSubStrings(sValue, tHTMLCharacters)
-				End If
-				sColumnText = sColumnText + sValue + "<" + Chr$(92) + "/a>"
-			Else
-				sColumnText = sColumnText + sValue
-			End If
-			If lFirstColumnBold And j = 1 Then
-				sColumnText = "<b>" + sColumnText + "<" + Chr$(92) + "/b>"
-			End If
-			If lAddColumnNames Then
-				sColumnText = "<tr><td>" + sColumnText + "<" + Chr$(92) + "/td><" + Chr$(92) + "/tr>"
-			Else
-				sColumnText = sColumnText + "<br>"
-			End If
-			sPopUpString = sPopUpString + sColumnText
-		End If
-	NextLabel:
-	Next
-	If lAddColumnNames Then
-		sPopUpString = sPopUpString + "<" + Chr$(92) + "/table>"
-	End If
-
-	aObjCol = sTable2Export + ".obj"
-
-	iObjectType = ObjectInfo(aObjCol, OBJ_INFO_TYPE)
-
-	sGeoJSONGeomObjType = ""
-	sCoordinates = ""
-
-	Do Case iObjectType
-		'From the GeoJSON Format Specification, on the "coordinates" member of a geometry object:
-		'The order of elements must follow x, y, z order (easting, northing, altitude for coordinates in a projected coordinate
-		'reference system, or longitude, latitude, altitude for coordinates in a geographic coordinate reference system).
-	
-		Case OBJ_TYPE_POINT
-
-			sGeoJSONGeomObjType = "Point"
-
-			sCoordinates = CentroidX(aObjCol) + ", " + CentroidY(aObjCol) 'First Longitude (X), then Latitude (Y)
-			
-			iGeoJSONLayerType = GeoJSONPointLayer
-
-		Case 11 'MultiPoint
-
-			sGeoJSONGeomObjType = "MultiPoint"
-
-			For m = 1 to ObjectInfo(aObjCol, OBJ_INFO_NPNTS)
-				sCoordinates = sCoordinates + "[" + ObjectNodeX(aObjCol, 1000, m) + ", " + ObjectNodeY(aObjCol, 1000, m) + "]"
-				If m < ObjectInfo(aObjCol, OBJ_INFO_NPNTS) Then
-					sCoordinates = sCoordinates + ", "
-				End If
-			Next
-
-			iGeoJSONLayerType = GeoJSONPointLayer
-
-		Case OBJ_TYPE_PLINE
-			
-			Call ProcessPline(aObjCol, sGeoJSONGeomObjType, sCoordinates)
-
-			iGeoJSONLayerType = GeoJSONLineStringLayer
-
-		Case OBJ_TYPE_LINE, 'What more is a line than a polyline with just one segment? :-)
-			OBJ_TYPE_ARC 'GeoJSON does not support arcs
-
-			oTmpObject = ConvertToPline(aObjCol)
-			
-			Call ProcessPline(oTmpObject, sGeoJSONGeomObjType, sCoordinates)
-
-			iGeoJSONLayerType = GeoJSONPolygonLayer
-
-		Case OBJ_TYPE_REGION 'GeoJSON Polygon or MultiPolygon
-
-			Call ProcessRegion(aObjCol, sGeoJSONGeomObjType, sCoordinates)
-
-			iGeoJSONLayerType = GeoJSONPolygonLayer
-
-		Case OBJ_TYPE_ELLIPSE, 'GeoJSON does not support ellipses (or circles); they need to be converted to regions (watch out: lot of points for a simple circle)
-			OBJ_TYPE_RECT, OBJ_TYPE_ROUNDRECT 'Rectangles (and rounded rectangles) will be converted to regions (GeoJSON Polygons) as well
-
-			oTmpObject = ConvertToRegion(aObjCol)
-			
-			Call ProcessRegion(oTmpObject, sGeoJSONGeomObjType, sCoordinates)
-
-			iGeoJSONLayerType = GeoJSONPolygonLayer
-
-	End Case
-
-	sFeatureString = "{" + Chr$(34) + "type" + Chr$(34) + ":" + Chr$(34) + "Feature" + Chr$(34) + "," + Chr$(34) + "properties" + Chr$(34) + ":{"
-	sFeatureString = sFeatureString + sPropertiesString
-	sFeatureString = sFeatureString + Chr$(34) + "popupContent" + Chr$(34) + ":" + Chr$(34) + sPopUpString + Chr$(34) + "},"
-	sFeatureString = sFeatureString + Chr$(34) + "geometry" + Chr$(34) + ":{" + Chr$(34) + "type" + Chr$(34) + ":" + Chr$(34)
-	sFeatureString = sFeatureString + sGeoJSONGeomObjType + Chr$(34) + "," + Chr$(34) + "coordinates" + Chr$(34) + ":[" + sCoordinates + "]" + "}"
-	If i < iNumRows Then
-		sFeatureString = sFeatureString + "},"
-	Else
-		sFeatureString = sFeatureString + "}"
-	End If
-	
-	Print #1, sFeatureString
-Next
-
-sCrsString = Chr$(34) + "crs" + Chr$(34) + ":{" + Chr$(34) + "type" + Chr$(34) + ":" + Chr$(34) + "EPSG" + Chr$(34) + ","
-sCrsString = sCrsString + Chr$(34) + "properties" + Chr$(34) + ":{" + Chr$(34) + "code" + Chr$(34) + ":"
-sCrsString = sCrsString + Chr$(34) + "4326" + Chr$(34) + "}}"
-
-Print #1, "]," + sCrsString + "};"
-
-'--------------------------------------------------------------------------
-' Create the html file
-'--------------------------------------------------------------------------
-
-sLayerNo = "L1" 'Any layer specific Javascript functions will get this layer number attached to them
-'At the moment this tool will only export 1 table/layer at the time (maybe later more?)
-'If you want to merge multiple layers in one file, they should for example not all have a function onEachFeature
-'attached to them, but rather onEachFeatureL1, onEachFeatureL2, etc.
-Print #2, "<!DOCTYPE html>"
-Print #2, "<html>"
-Print #2, "<head>"
-Print #2, Chr$(9) + "<title>" + sTitleWebsite + "</title>"
-Print #2, Chr$(9) + "<meta http-equiv=" + Chr$(34) + "Content-Type" + Chr$(34) + " content=" + Chr$(34) + "text/html;charset=UTF-8" + Chr$(34) + ">"
-Print #2, Chr$(9) + "<meta name=" + Chr$(34) + "viewport" + Chr$(34) + " content=" + Chr$(34) + "width=device-width, initial-scale=1.0" + Chr$(34) + ">"
-Print #2, Chr$(9) + "<link rel=" + Chr$(34) + "stylesheet" + Chr$(34) + " href=" + Chr$(34) + "leaflet-0.7.3/leaflet.css" + Chr$(34) + " />"
-Print #2, Chr$(9) + "<link rel=" + Chr$(34) + "stylesheet" + Chr$(34) + " href=" + Chr$(34) + "leaflet-plugins/leaflet.label.css" + Chr$(34) + " />"
-Print #2, Chr$(9) + "<link rel=" + Chr$(34) + "stylesheet" + Chr$(34) + " href=" + Chr$(34) + "leaflet-plugins/leaflet-search.min.css" + Chr$(34) + " />"
-Print #2, Chr$(9) + "<link rel=" + Chr$(34) + "stylesheet" + Chr$(34) + " href=" + Chr$(34) + "css/page.css" + Chr$(34) + " />"
-Print #2, Chr$(9) + "<link rel=" + Chr$(34) + "stylesheet" + Chr$(34) + " href=" + Chr$(34) + "css/mapinfo.css" + Chr$(34) + " />"
-Print #2, Chr$(9) + "<style>"
-Print #2, Chr$(9) + Chr$(9) + ".miDivIcon {"
-Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "border: 3px solid #F8F8F8;"
-If iPointShape = 1 Then
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "border-radius: 50%;"
-End If
-Print #2, Chr$(9) + Chr$(9) + "}"
-Print #2, Chr$(9) + "</style>"
-Print #2, "</head>"
-Print #2, "<body>"
-Print #2, Chr$(9) + "<header>"
-Print #2, Chr$(9) + Chr$(9) + "<h1>" + sTitleWebsite + "</h1>"
-Print #2, Chr$(9) + "</header>"
-Print #2, Chr$(9) + "<div id=" + Chr$(34) + "main" + Chr$(34) + ">"
-Print #2, Chr$(9) + Chr$(9) + "<div id=" + Chr$(34) + "map" + Chr$(34) + "></div>"
-Print #2, Chr$(9) + Chr$(9) + "<br>"
-Print #2, Chr$(9) + Chr$(9) + "<p>Table : " + sTable2Export + ".TAB, exported from MapInfo Professional (using the MapBasic application " + AppName + ".MBX)</p>"
-Print #2, Chr$(9) + Chr$(9) + "<p>Date: " + sCurDate + "</p>"
-Print #2, Chr$(9) + "</div>"
-Print #2, Chr$(9) + "<script src=" + Chr$(34) + "js/" + PathToFileName$(sGeoJSONFilePath) + Chr$(34) + "></script>"
-Print #2, Chr$(9) + "<script src=" + Chr$(34) + "leaflet-0.7.3/leaflet.js" + Chr$(34) + "></script>"
-Print #2, Chr$(9) + "<script src=" + Chr$(34) + "leaflet-plugins/leaflet.label.js" + Chr$(34) + "></script>"
-Print #2, Chr$(9) + "<script src=" + Chr$(34) + "leaflet-plugins/leaflet-search.min.js" + Chr$(34) + "></script>"
-Print #2, Chr$(9) + "<script src=" + Chr$(34) + "leaflet-plugins/TileLayer.Grayscale.js" + Chr$(34) + "></script>"
-Print #2, Chr$(9) + "<script>"
-sLayerNameTech = sFeatureCollection + "Layer"
-Print #2, Chr$(9) + Chr$(9) + "// The layer " + sLayerNameTech + " is referred to as '" + sLayerNo + "', i.e. all functions and variables specific to this layer have the suffix " + sLayerNo
-Print #2, sDatasetBounds
-Print #2
-Print #2, Chr$(9) + Chr$(9) + "var map = L.map('map')." + sFitBounds + ".setMaxBounds(bounds);"
-Print #2
-Print #2, Chr$(9) + Chr$(9) + "// Limit the minimum zoom level to the bounds of the dataset to prevent users from leaving this area on the map"
-Print #2, Chr$(9) + Chr$(9) + "var mz = map.getBoundsZoom(bounds, false);"
-Print #2
-Print #2, Chr$(9) + Chr$(9) + "var osmAttrib='Map data " + Chr$(169) + " <a href=" + Chr$(34) + "http://openstreetmap.org" + Chr$(34) + ">OpenStreetMap</a> contributors',"
-Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "osmUrl='http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';"
-Print #2
-If lExportTheme Then
-	Print #2, Chr$(9) + Chr$(9) + "var osm = L.tileLayer(osmUrl, {attribution: osmAttrib, minZoom: mz}).addTo(map);"
-	Print #2
-	Print #2, Chr$(9) + Chr$(9) + "var osmgray = L.tileLayer.grayscale(osmUrl, {attribution: osmAttrib, minZoom: mz}).addTo(map);"
-	Print #2
-Else
-	Print #2, Chr$(9) + Chr$(9) + "var osmgray = L.tileLayer.grayscale(osmUrl, {attribution: osmAttrib, minZoom: mz}).addTo(map);"
-	Print #2
-	Print #2, Chr$(9) + Chr$(9) + "var osm = L.tileLayer(osmUrl, {attribution: osmAttrib, minZoom: mz}).addTo(map);"
-	Print #2
-End If
-If lZoomInOnClick Then
-	Do Case iGeoJSONLayerType
-
-		Case GeoJSONPointLayer
-
-			Print #2, Chr$(9) + Chr$(9) + "// When user clicks on a marker, the popup opens and the map will zoom in to this particular marker"
-			Print #2, Chr$(9) + Chr$(9) + "map.on('popupopen', function(centerMarker) {"
-			Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "var cM = map.project(centerMarker.popup._latlng);"
-			Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "map.setView(map.unproject(cM),16, {animate: true});"
-			Print #2, Chr$(9) + Chr$(9) + "});"
-			Print #2
-
-		Case GeoJSONLineStringLayer, GeoJSONPolygonLayer
-
-			sZoomToFeatureFunction = "zoomToFeature" + sLayerNo
-			
-			Print #2, Chr$(9) + Chr$(9) + "function " + sZoomToFeatureFunction + "(e) {"
-			Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "map.fitBounds(e.target.getBounds(), {padding:[25,25]});"
-			Print #2, Chr$(9) + Chr$(9) +  "}"
-			Print #2
-
-	End Case
-End If
-
-If lExportTheme Then
-
-	Print #2, Chr$(9) + Chr$(9) + "function getColor(d) {"
-	
-	Do Case iTheme
-
-	Case 1 'Ranges
-
-		sThemeColoring = ""
-		For i = 1 To UBound(sValuesArray)
-			If i < UBound(sValuesArray) Then
-				sThemeColoring = Chr$(10) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "d >= " + sValuesArray(i) + " ? '" + sColorValsArray(i) + "' :" + sThemeColoring
-			Else
-				sThemeColoring = Chr$(9) + Chr$(9) + Chr$(9) + "return d >= " + sValuesArray(i) + " ? '" + sColorValsArray(i) + "' :" + sThemeColoring
-			End If
-		Next
-
-	Case 2 'Individual Values
-		sThemeColoring = ""
-		For i = 1 To UBound(sValuesArray)
-			If i < UBound(sValuesArray) Then
-				sThemeColoring = Chr$(10) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "d == '" + sValuesArray(i) + "' ? '" + sColorValsArray(i) + "' :" + sThemeColoring
-			Else
-				sThemeColoring = Chr$(9) + Chr$(9) + Chr$(9) + "return d == '" + sValuesArray(i) + "' ? '" + sColorValsArray(i) + "' :" + sThemeColoring
-			End If
-		Next
-
-	End Case
-
-	Print #2, sThemeColoring
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "'" + sDefaultColor + "';"
-	Print #2, Chr$(9) + Chr$(9) + "}"
-	Print #2
-	
-	sBorderLineWeightValuePolygon = "1"
-	sBorderColorValuePolygon = "'#C0C0C0'" 'Silver
-	sFillOpacityValuePolygon = "0.8"
-	sFillColorValuePolygon = "getColor(feature.properties." + LCase$(ReplaceMultipleSubStrings(sThemeCol, tAccentuatedCharacters)) + ")"
-	
-Else
-	sBorderLineWeightValuePolygon = "2"
-	sBorderColorValuePolygon = "'" + sObjectColor + "'"
-	sFillOpacityValuePolygon = "0.05"
-	sFillColorValuePolygon = "'" + sObjectColor + "'"
-End If
-
-'Styling
-Do Case iGeoJSONLayerType
-
-	Case GeoJSONPointLayer
-
-		If iPointStyleSetting = 1 Then
-
-			sIconValue = "pngIcon" + sLayerNo
-
-			Print #2,  Chr$(9) + Chr$(9) + "var " + sIconValue + " = L.icon({"
-			Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "iconUrl: 'blue-arrow.png',"
-			Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "iconSize: [32, 37],"
-			Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "iconAnchor: [16, 37],"
-			Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "popupAnchor: [0, -28]"
-			Print #2,  Chr$(9) + Chr$(9) + "});"
-			
-			Save File ApplicationDirectory$() + "blue-arrow.png" As sExportFolder + "blue-arrow.png"
-			
-		ElseIf iPointStyleSetting = 2 Then
-
-			sIconValue = "divIcon" + sLayerNo
-
-			Print #2, Chr$(9) + Chr$(9) + "var " + sIconValue + " = L.divIcon({"
-			
-			If iPointSize <> 12 Then
-				Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "iconSize: new L.Point(" + iPointSize + ", " + iPointSize + "),"
-			End If
-			Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "background: " + sFillColorValuePolygon + ","
-			Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "className: 'miDivIcon'"
-			Print #2,  Chr$(9) + Chr$(9) + "});"
-			
-		End If
-
-		sStyleValue = Chr$(9) + Chr$(9) + Chr$(9) + "pointToLayer: function (feature, latlng) {" + Chr$(10)
-		sStyleValue = sStyleValue + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "return L.marker(latlng, {icon: " + sIconValue + "});" + Chr$(10)
-		sStyleValue = sStyleValue + Chr$(9) + Chr$(9) + Chr$(9) + "}"
-		
-		sOptionHighLighting = ""
-
-	Case GeoJSONLineStringLayer, GeoJSONPolygonLayer
-
-		sStyleFunction = "style" + sLayerNo
-
-		Print #2,  Chr$(9) + Chr$(9) + "function " + sStyleFunction + "(feature) {"
-		Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + "return {"
-		Do Case iGeoJSONLayerType
-			Case GeoJSONLineStringLayer
-				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "weight: 5,"
-				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "opacity: 1,"
-				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "color: " + sFillColorValuePolygon
-			Case GeoJSONPolygonLayer
-				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "weight: " + sBorderLineWeightValuePolygon + ","
-				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "opacity: 1,"
-				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "color: " + sBorderColorValuePolygon + ","
-				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "fillOpacity: " + sFillOpacityValuePolygon + ","
-				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "fillColor: " + sFillColorValuePolygon
-		End Case
-		Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + "};"
-		Print #2,  Chr$(9) + Chr$(9) + "}"
-		Print #2
-		
-		sHighlightFeatureFunction = "highlightFeature" + sLayerNo
-		
-		Print #2,  Chr$(9) + Chr$(9) + "function " + sHighlightFeatureFunction + "(e) {"
-		Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + "var layer = e.target;"
-		Print #2
-		Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + "layer.setStyle({"
-		Do Case iGeoJSONLayerType
-			Case GeoJSONLineStringLayer
-				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "weight: 12"
-			Case GeoJSONPolygonLayer
-				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "weight: 5,"
-				Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "fillOpacity: 0.5"
-		End Case
-		Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + "});"
-		Print #2
-		Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + "if (!L.Browser.ie && !L.Browser.opera) {"
-		Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "layer.bringToFront();"
-		Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + "}"
-		Print #2
-		Print #2,  Chr$(9) + Chr$(9) + "}"
-		Print #2
-		
-		sResetHighlightFunction = "resetHighlight" + sLayerNo
-		
-		Print #2,  Chr$(9) + Chr$(9) + "function " + sResetHighlightFunction + "(e) {"
-		Print #2,  Chr$(9) + Chr$(9) + Chr$(9) + sLayerNameTech + ".resetStyle(e.target);"
-		Print #2,  Chr$(9) + Chr$(9) + "}"
-
-		sStyleValue = Chr$(9) + Chr$(9) + Chr$(9) + "style: " + sStyleFunction
-
-		sOptionHighLighting = Chr$(10) + Chr$(9) + Chr$(9) + Chr$(9) + "layer.on({" + Chr$(10)
-		sOptionHighLighting = sOptionHighLighting + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "mouseover: " + sHighlightFeatureFunction + "," + Chr$(10)
-		sOptionHighLighting = sOptionHighLighting + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "mouseout: " + sResetHighlightFunction + Chr$(10)
-		sOptionHighLighting = sOptionHighLighting + Chr$(9) + Chr$(9) + Chr$(9) + "});"
-
-End Case
-
-Print #2
-
-sOnEachFeatureFunction = "onEachFeature" + sLayerNo
-
-Print #2, Chr$(9) + Chr$(9) + "function " + sOnEachFeatureFunction + "(feature, layer) {"
-Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "if (feature.properties && feature.properties.popupContent) {"
-Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "layer.bindPopup(feature.properties.popupContent);"
-Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "}"
-Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "if (feature.properties && feature.properties." + sTooltipCol + ") {"
-Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "layer.bindLabel(feature.properties." + sTooltipCol + ");"
-Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "}" + sOptionHighLighting
-
-If lZoomInOnClick And iGeoJSONLayerType IN (GeoJSONLineStringLayer, GeoJSONPolygonLayer) Then
-
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "// When user clicks on a feature the map will zoom in to this particular feature"
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "layer.on({"
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "click: " + sZoomToFeatureFunction
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "});"
-
-End If
-
-Print #2, Chr$(9) + Chr$(9) + "}"
-Print #2
-Print #2, Chr$(9) + Chr$(9) + "var " + sLayerNameTech + " = L.geoJson(" + sFeatureCollection + ", {"
-Print #2, sStyleValue + ","
-Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "onEachFeature: " + sOnEachFeatureFunction
-Print #2, Chr$(9) + Chr$(9) + "}).addTo(map);"
-Print #2
-Print #2, Chr$(9) + Chr$(9) + "var baseLayers = {"
-If lExportTheme Then
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(34) + "OpenStreetMap" + Chr$(34) + ": osm,"
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(34) + "OpenStreetMap (Gray) " + Chr$(34) + ": osmgray"
-Else
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(34) + "OpenStreetMap (Gray) " + Chr$(34) + ": osmgray,"
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(34) + "OpenStreetMap" + Chr$(34) + ": osm"
-End If
-Print #2, Chr$(9) + Chr$(9) + "};"
-Print #2
-Print #2, Chr$(9) + Chr$(9) + "var overlays = {"
-Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(34) + sLayerNamePub + Chr$(34) + ": " + sLayerNameTech 
-Print #2, Chr$(9) + Chr$(9) + "};"
-Print #2
-Print #2, Chr$(9) + Chr$(9) + "L.control.layers(baseLayers, overlays).addTo(map);"
-Print #2
-Print #2, Chr$(9) + Chr$(9) + "var searchControl = new L.Control.Search({layer: " + sLayerNameTech + ", propertyName: '" + sTooltipCol + "', circleLocation:false});"
-Print #2
-Print #2, Chr$(9) + Chr$(9) + "searchControl.on('search_locationfound', function(e) {"
-Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "e.layer.setStyle({fillColor: '#0000FF', color: '#0000FF'});"
-Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "if(e.layer._popup)"
-Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "e.layer.openPopup();"
-Print #2, Chr$(9) + Chr$(9) + "}).on('search_collapsed', function(e) {"
-Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "featuresLayer.eachLayer(function(layer) { //restore feature color"
-Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "featuresLayer.resetStyle(layer);"
-Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "});"	
-Print #2, Chr$(9) + Chr$(9) + "});"
-Print #2
-Print #2, Chr$(9) + Chr$(9) + "map.addControl(searchControl); //inizialize search control"
-Print #2
-If lExportTheme Then
-	Print #2, Chr$(9) + Chr$(9) + "var legend = L.control({position: 'bottomright'});"
-	Print #2
-	Print #2, Chr$(9) + Chr$(9) + "legend.onAdd = function (map) {"
-	Print #2
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "var div = L.DomUtil.create('div', 'title legend'),"
-
-	Do Case iTheme
-	
-	Case 1 'Ranges
-	
-		sRanges = "ranges = ["
-		For i = 1 to UBound(sValuesArray)
-			If i < UBound(sValuesArray) Then
-				sRanges = sRanges + sValuesArray(i) + ", "
-			Else
-				sRanges = sRanges + sValuesArray(i) + "],"
-			End If
-		Next
-
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + sRanges
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "maxValue = " + sMaxValue + ","
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "labels = [];"
-		Print #2
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "// loop through the intervals and generate a label with a colored square for each"
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "for (var i = 0; i < ranges.length; i++) {"
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "div.innerHTML +="
-		Do Case iGeoJSONLayerType
-			Case GeoJSONPointLayer
-				Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) +
-				"'<div class=" + Chr$(34) + "miDivIcon" + Chr$(34) + " style=" + Chr$(34) + "background:' + getColor(ranges[i] + 1) + 'width: " +
-				iPointSize + "px; height: " + iPointSize + "px; display: inline-block; margin-right: 5px;" + Chr$(34) + "></div>' +"
-			Case GeoJSONLineStringLayer
-				Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "'<hr style=" + Chr$(34) + "color:' + getColor(ranges[i] + 1) + '" + Chr$(34) + ">' +"
-			Case GeoJSONPolygonLayer
-				Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "'<i style=" + Chr$(34) + "background:' + getColor(ranges[i] + 1) + '" + Chr$(34) + "></i> ' +"
-		End Case
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "ranges[i] + (ranges[i + 1] ? '&ndash;' + ranges[i + 1] + '<br>' : '&ndash;' + maxValue);"
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "}"
-
-	Case 2 'Individual Values
-	
-		sValues = "values = ["
-		For i = 1 to UBound(sValuesArray)
-			If i < UBound(sValuesArray) Then
-				sValues = sValues + "'" + sValuesArray(i) + "', "
-			Else
-				sValues = sValues + "'" + sValuesArray(i) + "'],"
-			End If
-		Next
-
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + sValues
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "labels = [];"
-		Print #2
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "// loop through the intervals and generate a label with a colored square for each"
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "for (var i = 0; i < values.length; i++) {"
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "div.innerHTML +="
-		Do Case iGeoJSONLayerType
-			Case GeoJSONPointLayer
-				Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) +
-				"'<div class=" + Chr$(34) + "miDivIcon" + Chr$(34) + " style=" + Chr$(34) + "background:' + getColor(values[i]) + 'width: " +
-				iPointSize + "px; height: " + iPointSize + "px; display: inline-block; margin-right: 5px;" + Chr$(34) + "></div>' +"
-			Case GeoJSONLineStringLayer
-				Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "'<hr style=" + Chr$(34) + "color:' + getColor(values[i]) + '" + Chr$(34) + ">' +"
-			Case GeoJSONPolygonLayer
-				Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "'<i style=" + Chr$(34) + "background:' + getColor(values[i]) + '" + Chr$(34) + "></i>' +"
-		End Case
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + Chr$(9) + "values[i] + '<br>';"
-		Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "}"
-
-	End Case
-
-	Print #2
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "div.innerHTML = '<b>" + sLegendTitle + "</b><br>" + sLegendSubTitle + "<br>' + div.innerHTML;"
-	Print #2
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "return div;"
-	Print #2, Chr$(9) + Chr$(9) + "};"
-	Print #2
-	Print #2, Chr$(9) + Chr$(9) + "legend.addTo(map);"
-	Print #2
-End If
-If lMapTitle Then
-	Print #2, Chr$(9) + Chr$(9) + "var title = L.control({position: 'bottomleft'});"
-	Print #2
-	Print #2, Chr$(9) + Chr$(9) + "title.onAdd = function (map) {"
-	Print #2
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "var div = L.DomUtil.create('div', 'title');"
-	Print #2
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "div.innerHTML = '<b>" + sMapTilte + "</b>';"
-	Print #2
-	Print #2, Chr$(9) + Chr$(9) + Chr$(9) + "return div;"
-	Print #2, Chr$(9) + Chr$(9) + "};"
-	Print #2
-	Print #2, Chr$(9) + Chr$(9) + "title.addTo(map);"
-	Print #2
-End If
-Print #2, Chr$(9) + "</script>"
-Print #2, "</body>"
-Print #2, "</html>"
-
-Close File #1
-Close File #2
-
-OnError Goto HandleError
-
-'Copy leaflet-0.7.3
-Call CopyDir(ApplicationDirectory$() + "leaflet-0.7.3", sExportFolder + "leaflet-0.7.3")
-
-'Copy leaflet-plugins
-Call CopyDir(ApplicationDirectory$() + "leaflet-plugins", sExportFolder + "leaflet-plugins")
-
-'Copy local css dir
-Call CopyDir(ApplicationDirectory$() + "css", sExportFolder + "css")
-
-' Convert the ANSI files to UTF-8
-Call ConvertFileANSItoUTF8(sHTMLFilePathTmp, sHTMLFilePath)
-If FileExists(sHTMLFilePathTmp) Then
-	Kill sHTMLFilePathTmp 	
-End If
-
-Call ConvertFileANSItoUTF8(sGeoJSONFilePathTmp, sGeoJSONFilePath)
-If FileExists(sGeoJSONFilePathTmp) Then
-	Kill sGeoJSONFilePathTmp 	
-End If
-
-If AskAgain("Web Map Application created:" + Chr$(10) + sHTMLFilePath + Chr$(10) + Chr$(10) + "Do you want to open it in a browser?", AppName) Then
-	Call OpenFileOrDir(sHTMLFilePath)
-End If
-
-'-------------------------------------------
-		
-Exit Sub
-'---------------------------
-HandleError:
-	Note Error$()
-	Exit Sub
-
-'---------------------------
-HandleErrorDuringFileCreation:
-	Close File #1
-	Close File #2
-	Note Error$()
-
-End Sub CreateWebMapApplication
-
 '*********************************************************************************************
 Sub EnableLayerSelection
 '*********************************************************************************************
@@ -724,11 +82,12 @@ Dim i As Integer
 Dim fX1, fY1, fX2, fY2, fX1ds, fY1ds, fX2ds, fY2ds, fX1mw, fY1mw, fX2mw, fY2mw As Float
 Dim oMapWindow, oDataset As Object
 
+lMapTitle = TRUE
+sMapTilte = "Map Title"
+
 'Temporary
 sLegendTitle = "Title"
 sLegendSubTitle = "Sub title"
-lMapTitle = TRUE
-sMapTilte = "Map Title"
 
 	sFitBounds = ""
 	sDatasetBounds = ""
@@ -897,51 +256,69 @@ Dim i, iMapWindowID As Integer
 	Dialog
 		Title "Layer Settings"
 		Calling CheckForHyperlinks
-		Control StaticText Title "Layer&Group Name*:" Position 2dW, 1dH
-		Control EditText Value sLayerNamePub Position 19dW, 1dH Width 35dW ID LSDlgETLNameID
-		Control StaticText Title "*As visible in the Leaflet Layers Control" Position 2dW, 2.5dH
+		Calling EnableThematicLegendOptions
+		Control CheckBox Title "&Map Title:" Value lMapTitle Position 2dW, 1dH ID LSDlgCBMTitleID Calling MapTitleHandler
+		Control EditText Value sMapTilte Position 2dW, 2.5dH Width 46dW ID LSDlgETMTitleID
+		Control StaticText Title "Layer&Group Name (in Leaflet Layers Control):" Position 57.5dW, 1dH
+		Control EditText Value sLayerNamePub Position 57.5dW, 2.5dH Width 37dW ID LSDlgETLNameID
 		Control StaticText Title "Columns Not to be Added to Pop&up:" Position 2dW, 4.5dH
-		Control ListBox Position 2dW, 6.5dH Width 36dW Height 17dH ID LSDlgLBLayersNotAddedID Calling NonAddedColumnsHandler
-		Control CheckBox Title "Add Column &Names" Value lAddColumnNames Position 56.5dW, 1.5dH ID LSDlgCBAddColNmID Calling AddColNamesHandler
-		Control CheckBox Title "First Column &Bold" Value lFirstColumnBold Position 56.5dW, 3dH ID LSDlgCBCol1BoldID
-		Control StaticText Title "Columns to be Added to &Popup:" Position 56.5dW, 4.5dH
-		Control ListBox Title From Variable sColumnsListPopup Position 56.5dW, 6.5dH Width 36dW Height 17dH ID LSDlgLBLayersAddedID Calling AddedColumnsHandler
-		Control Button Title "&Add >" Position 38.75dW, 6.5dH Width 16.5dW Height 3dH Disable ID LSDlgBtnAddID Calling ModifyColumnsListPopupAdd
-		Control Button Title "A&dd All >>" Position 38.75dW, 10dH Width 16.5dW Height 3dH Disable ID LSDlgBtnAddAllID Calling ModifyColumnsListPopupAddAll
-		Control Button Title "< &Remove" Position 38.75dW, 17dH Width 16.5dW Height 3dH Disable ID LSDlgBtnRemID Calling ModifyColumnsListPopupRemove
-		Control Button Title "<< R&emove All" Position 38.75dW, 20.5dH Width 16.5dW Height 3dH ID LSDlgBtnRemAllID Calling ModifyColumnsListPopupRemoveAll
-		Control GroupBox Title "Hyperlink:" Position 2dW, 24.5dH Width 58dW Height 9dH Disable ID LSDlgGBHLnkID
+		Control ListBox Position 2dW, 6.5dH Width 37dW Height 17dH ID LSDlgLBLayersNotAddedID Calling NonAddedColumnsHandler
+		Control StaticText Title "Columns to be Added to &Popup:" Position 57.5dW, 4.5dH
+		Control ListBox Title From Variable sColumnsListPopup Position 57.5dW, 6.5dH Width 37dW Height 17dH ID LSDlgLBLayersAddedID Calling AddedColumnsHandler
+		Control Button Title "&Add >" Position 39.75dW, 6.5dH Width 16.5dW Height 3dH Disable ID LSDlgBtnAddID Calling ModifyColumnsListPopupAdd
+		Control Button Title "A&dd All >>" Position 39.75dW, 10dH Width 16.5dW Height 3dH Disable ID LSDlgBtnAddAllID Calling ModifyColumnsListPopupAddAll
+		Control Button Title "< &Remove" Position 39.75dW, 17dH Width 16.5dW Height 3dH Disable ID LSDlgBtnRemID Calling ModifyColumnsListPopupRemove
+		Control Button Title "<< R&emove All" Position 39.75dW, 20.5dH Width 16.5dW Height 3dH ID LSDlgBtnRemAllID Calling ModifyColumnsListPopupRemoveAll
+		Control GroupBox Title "Hyperlink:" Position 2dW, 24.5dH Width 40.5dW Height 9dH Disable ID LSDlgGBHLnkID
 		Control StaticText Title "Column:" Position 3dW, 26dH Disable ID LSDlgSTHLColID
-		Control EditText Position 10.5dW, 26dH Width 31.5dW Disable ID LSDlgETHLColID
+		Control EditText Position 10.5dW, 26dH Width 30.5dW Disable ID LSDlgETHLColID
 		Control StaticText Title "A&lias:" Position 3dW, 28dH Disable ID LSDlgSTAliasID
-		Control PopupMenu Position 10.5dW, 28dH Width 31.5dW Disable ID LSDlgPUMAliasID
-		Control RadioGroup Position 10.5dW, 30dH Title "&Same Window;New &Window or Tab" Value iTarget Disable ID LSDlgRGTargetID
-		Control Button Title "Re&move Hyperlink" Position 42.5dW, 26dH Width 16.5dW Height 3.5dH Disable ID LSDlgBtnRemHLID Calling RemoveHyperLink
+		Control PopupMenu Position 10.5dW, 28dH Width 30.5dW Disable ID LSDlgPUMAliasID
+		Control RadioGroup Position 21dW, 30dH Title "&Same Window;New &Window or Tab" Value iTarget Disable ID LSDlgRGTargetID
+		Control Button Title "Re&move Hyperlink" Position 3dW, 31dH Width 16.5dW Disable ID LSDlgBtnRemHLID Calling RemoveHyperLink
 
-		Control CheckBox Title "&Zoom in to marker/feature on click" Value lZoomInOnClick Position 61dW, 26dH ID LSDlgCBZmClckID
+		Control GroupBox Title "Popup:" Position 43.5dW, 24.5dH Width 21dW Height 5dH Disable ID LSDlgGBPopupID
+		Control CheckBox Title "Add Column &Names" Value lAddColumnNames Position 44.5dW, 26dH ID LSDlgCBAddColNmID Calling AddColNamesHandler
+		Control CheckBox Title "First Column &Bold" Value lFirstColumnBold Position 44.5dW, 28dH ID LSDlgCBCol1BoldID
 
-		Control StaticText Title "&Tooltip:" Position 3dW, 34.5dH ID LSDlgSTTTipID
-		Control PopupMenu Title From Variable sColumnsList Value 2 Position 10.5dW, 34.5dH Width 31.5dW ID LSDlgPUMTTipID
+		Control StaticText Title "&Tooltip:" Position 66dW, 24.5dH ID LSDlgSTTTipID
+		Control PopupMenu Title From Variable sColumnsList Value 2 Position 66dW, 26dH Width 28.5dW ID LSDlgPUMTTipID
 
+		Control GroupBox Title "Thematic Legend:" Position 43.5dW, 30dH Width 41.5dW Height 5.5dH Disable ID LSDlgGBThemeTitlesID
+		Control StaticText Title "T&itle:" Position 44.5dW, 31.5dH Disable ID LSDlgSTLTtlID
+		Control EditText Position 53dW, 31.5dH Width 30.5dW Disable ID LSDlgETLTtlID
+		Control StaticText Title "Sub T&itle:" Position 44.5dW, 33.5dH Disable ID LSDlgSTLSTtlID
+		Control EditText Position 53dW, 33.5dH Width 30.5dW Disable ID LSDlgETLSTtlID
+
+		Control CheckBox Title "&Zoom in to marker/feature on click" Value lZoomInOnClick Position 2dW, 34dH ID LSDlgCBZmClckID
+		
 		Control OKButton Title "&OK" ID LSDlgOKBtnID Calling LSDlgOKBtnHandler
 		Control CancelButton Title "&Cancel"
 		Control Button Title "&Help" Calling AddIn_Help
 
 		If CommandInfo(CMD_INFO_DLG_OK) Then
+			If lAddColumnNames Then
+				lFirstColumnBold = FALSE
+			End If
 			Alter Control ExpDlgETHTMLFilePathID Enable
 			Alter Control ExpDlgETTitleWebPageID Enable
 			Alter Control ExpDlgSTTitleWebPageID Enable
 			Alter Control ExpDlgSTHTMLFileID Enable
 			Alter Control ExpDlgBtnSetHTMLFilePathID Enable
 			If IsPointLineOrPolygonTable(sTable2Export) = 1 Then
-				Alter Control ExpDlgBtnPointStyleSetID Show
-				Alter Control ExpDlgSTStep5ID Enable Title "Set Point Style Settings"
+				If lExportTheme Then
+					Alter Control ExpDlgSTStep5ID Enable Title "Step 5: Thematic colors will be used."
+					iPointStyleSetting = 3 'circleMarker for thematic map
+				Else
+					Alter Control ExpDlgBtnPointStyleSetID Show
+					Alter Control ExpDlgSTStep5ID Enable Title "Step 5: Set Point Style Settings"
+				End If
 			ElseIf IsPointLineOrPolygonTable(sTable2Export) In (2,3) Then
 				If lExportTheme Then
-					Alter Control ExpDlgSTStep5ID Enable Title "Thematic colors will be used."
+					Alter Control ExpDlgSTStep5ID Enable Title "Step 5: Thematic colors will be used."
 				Else
 					Alter Control ExpDlgBtnSetColorID Show
-					Alter Control ExpDlgSTStep5ID Enable Title "Set Color"
+					Alter Control ExpDlgSTStep5ID Enable Title "Step 5: Set Color"
 				End If
 			End If
 			Alter Control ExpDlgSTStep3ID Enable
@@ -1394,6 +771,25 @@ HandleError:
 End Sub ModifyColumnsListPopup
 
 '************************************************************************************
+Sub MapTitleHandler
+'************************************************************************************
+
+OnError Goto HandleError
+
+	If ReadControlValue(LSDlgCBMTitleID) Then
+		Alter Control LSDlgETMTitleID Enable
+	Else
+		Alter Control LSDlgETMTitleID Value "" Disable
+	End If
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub MapTitleHandler
+
+'************************************************************************************
 Sub AddColNamesHandler
 '************************************************************************************
 
@@ -1411,6 +807,27 @@ HandleError:
 	Note Error$()
 
 End Sub AddColNamesHandler
+
+'************************************************************************************
+Sub EnableThematicLegendOptions
+'************************************************************************************
+
+OnError Goto HandleError
+
+		If lExportTheme Then
+			Alter Control LSDlgGBThemeTitlesID Enable
+			Alter Control LSDlgSTLTtlID Enable
+			Alter Control LSDlgETLTtlID Enable Value sThemeCol
+			Alter Control LSDlgSTLSTtlID Enable
+			Alter Control LSDlgETLSTtlID Enable
+		End If
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub EnableThematicLegendOptions
 
 '************************************************************************************
 Sub CheckForHyperlinks
