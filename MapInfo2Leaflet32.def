@@ -3,7 +3,7 @@
 '**  
 '**  
 '**  Author:	Egge-Jan Pollé
-'**  Date:		4 November 2014
+'**  Date:		7 November 2014
 '**  Version:	AppVersion (see below)
 '************************************************************************************
 Include "MAPBASIC.DEF"
@@ -16,11 +16,13 @@ Declare Sub CreateWebMapApplication
 Declare Sub EnableLayerSelection
 Declare Sub ExpDlgOKBtnHandler
 Declare Sub LayerSettingsDialog
+Declare Sub ResetThemeValues
 Declare Sub ColorSettingsDialog
 Declare Sub PointStyleSettingsDialog
 Declare Sub SetPointStyleSettingsDlg
 Declare Sub PointStyleSettingChangeHandler
 Declare Sub ColorPicker
+Declare Sub PrepareLayerSettingsDialog
 Declare Sub CheckForHyperlinks
 Declare Sub EnableThematicLegendOptions
 Declare Sub RemoveHyperLink
@@ -48,7 +50,7 @@ Declare Function IsPointLineOrPolygonTable(ByVal sTable As String) As Integer
 Declare Function LayerIsInMap(ByVal iWindowID As Integer, ByVal sLayerName As String) As Logical
 
 Declare Function ExtractThematicValues(ByVal sMapWindow As String, ByVal iMapWindowID As Integer, sThemeLayer As String, sThemeCol As String,
-	sValuesArray() As String, sColorValsArray() As String, sMaxValue As String, sDefaultColor As String) As Integer
+	sValuesArray() As String, sColorValsArray() As String, sMaxValue As String, sDefaultColor As String, iNoOfThemes As Integer) As Integer
 
 
 Declare Function ReplaceSubStringWith(	'E.g. replace underscore ("_" or Chr$(95)) with space (" " or Chr$(32)) 
@@ -97,7 +99,7 @@ Global sTitleWebsite, sExportFolder, sHTMLFilePath, sHTMLFilePathTmp, sGeoJSONFi
 Global sTableList(), sColumnsList(), sTable2Export, sDescription, sLegendTitle, sLegendSubTitle, sMapTilte As String
 Global sColumnsListPopup(), sColumnsListNonPopup(), sHyperlink, sTooltipCol, sFitBounds, sDatasetBounds As String
 Global lAddColumnNames, lFirstColumnBold, lZoomInOnClick, lExportTheme, lMapTitle As Logical
-Global iPointStyleSetting, iTarget, iTheme, iMIColor, iPointShape, iPointSize As Integer
+Global iPointStyleSetting, iTarget, iTheme, iMIColor, iPointShape, iPointSize, iNoOfThemes As Integer
 Global sThemeLayer, sThemeCol, sValuesArray(), sColorValsArray(), sMaxValue, sDefaultColor, sObjectColor As String
 
 Type tColumn2Export

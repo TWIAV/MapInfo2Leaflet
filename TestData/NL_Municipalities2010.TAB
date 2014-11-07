@@ -1,0 +1,43 @@
+!table
+!version 450
+!charset WindowsLatin1
+
+Definition Table
+  Type NATIVE Charset "WindowsLatin1"
+  Fields 31
+    CBSCODE Char (6) Index 1 ;
+    Name Char (30) Index 2 ;
+    Inhabitants Float ;
+    Male Float ;
+    Female Float ;
+    inh_under_5 Float ;
+    inh_5_9 Float ;
+    inh_10_14 Float ;
+    inh_15_19 Float ;
+    inh_20_24 Float ;
+    inh_25_44 Float ;
+    inh_45_64 Float ;
+    inh_65_79 Float ;
+    inh_80_and_older Float ;
+    Surface_total Float ;
+    Surface_land Float ;
+    Surface_inner_water Float ;
+    Surface_outer_water Float ;
+    Density Float Index 3 ;
+    Region_code Char (10) ;
+    Region_name Char (15) ;
+    Province_code Char (10) ;
+    Province_name Char (13) ;
+    COROP_code Char (10) ;
+    COROP_name Char (35) ;
+    Police_district_code Char (10) ;
+    Police_district_name Char (25) ;
+    Urban_aggl_code Char (10) ;
+    Urban_aggl_name Char (16) ;
+    Urbanized_region_code Char (10) ;
+    Urbanized_region_name Char (16) ;
+begin_metadata
+"\IsReadOnly" = "FALSE"
+"\MapInfo" = ""
+"\MapInfo\TableID" = "5946625f-b127-4a20-8475-ce29e8350a9f"
+end_metadata

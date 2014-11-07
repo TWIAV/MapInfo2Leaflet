@@ -3,7 +3,7 @@
 '**  
 '**  
 '**  Author:	Egge-Jan Pollé
-'**  Date:		3 November 2014
+'**  Date:		7 November 2014
 '************************************************************************************
 Include "MapInfo2Leaflet32.def"
 
@@ -204,19 +204,12 @@ End Function
 
 Function ExtractThematicValues(ByVal sMapWindow As String, ByVal iMapWindowID As Integer, sThemeLayer As String,
 	sThemeCol As String, sValuesArray() As String, sColorValsArray() As String,
-	sMaxValue As String, sDefaultColor As String) As Integer
+	sMaxValue As String, sDefaultColor As String, iNoOfThemes As Integer) As Integer
 
 Dim i, j, m, n, p, q, r, iThematic As Integer
 Dim sRec As String
 
-'Reset Theme Values
-sThemeLayer = ""
-sThemeCol = ""
-ReDim sValuesArray(0)
-ReDim sColorValsArray(0)
-sMaxValue = ""
-sDefaultColor = ""
-
+Call ResetThemeValues
 
 Include "ReplacementStrings.mb"
 
@@ -230,6 +223,7 @@ Include "ReplacementStrings.mb"
 
 		'look for the start of the shade clause
 		If Left$(sRec, 5) = "shade" Then
+			iNoOfThemes = iNoOfThemes + 1
 			If InStr(1, sRec, "ranges") > 0 Then
 				ExtractThematicValues = 1
 				iThematic = 1

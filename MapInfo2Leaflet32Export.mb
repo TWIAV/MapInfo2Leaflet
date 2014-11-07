@@ -3,7 +3,7 @@
 '**  Export Module
 '**  
 '**  Author:	Egge-Jan Pollé
-'**  Date:		3 November 2014
+'**  Date:		7 November 2014
 '************************************************************************************
 Include "MapInfo2Leaflet32.def"
 
@@ -40,7 +40,7 @@ OnError Goto HandleError
 		Control StaticText Title "Set Title for &Web Page:" Position 3dW, 4.5dH Disable ID ExpDlgSTTitleWebPageID
 		Control EditText Position 3dW, 6dH Width 75dW Disable ID ExpDlgETTitleWebPageID
 
-		Control StaticText Title "Set &html file:" Position 3dW, 8dH Disable ID ExpDlgSTHTMLFileID
+		Control StaticText Title "Set Output Folder for &html file (it is recommended to choose an empty folder):" Position 3dW, 8dH Disable ID ExpDlgSTHTMLFileID
 		Control Button Title "..." Width 4dW Position 3dW, 9.25dH Disable ID ExpDlgBtnSetHTMLFilePathID Calling SetHTMLFilePath
 		Control EditText Position 8dW, 9.5dH Width 70dW Disable ID ExpDlgETHTMLFilePathID
 
@@ -51,7 +51,7 @@ OnError Goto HandleError
 		Control StaticText Title "Step 1: Select Table to Export" Position 3dW, 13dH
 		Control StaticText Title "Step 2: Set Layer Settings" Position 3dW, 14.5dH Disable ID ExpDlgSTStep2ID
 		Control StaticText Title "Step 3: Set Title for Web Page" Position 3dW, 16dH Disable ID ExpDlgSTStep3ID
-		Control StaticText Title "Step 4: Set html file" Position 3dW, 17.5dH Disable ID ExpDlgSTStep4ID
+		Control StaticText Title "Step 4: Set Output Folder for html file" Position 3dW, 17.5dH Disable ID ExpDlgSTStep4ID
 		Control StaticText Title "Step 5: Set Style Settings" + Space$(30) Position 3dW, 19dH Disable ID ExpDlgSTStep5ID
 		Control StaticText Title "Step 6: Click OK to Export" Position 3dW, 20.5dH Disable ID ExpDlgSTStep6ID
 	
@@ -84,10 +84,6 @@ Dim oMapWindow, oDataset As Object
 
 lMapTitle = TRUE
 sMapTilte = "Map Title"
-
-'Temporary
-sLegendTitle = "Title"
-sLegendSubTitle = "Sub title"
 
 	sFitBounds = ""
 	sDatasetBounds = ""
@@ -211,8 +207,8 @@ Dim sHTMLFile As String
 		sHTMLFilePathTmp = Left$(sHTMLFilePath, Len(sHTMLFilePath) - 5) + "_tmp.html"
 		sExportFolder = PathToDirectory$(sHTMLFilePath)
 		sHTMLFile = PathToFileName$(sHTMLFilePath)
-		sGeoJSONFilePath = sExportFolder + "js\" + Left$(sHTMLFile, Len(sHTMLFile) - 5) + ".js"
-		sGeoJSONFilePathTmp = sExportFolder + "js\" + Left$(sHTMLFile, Len(sHTMLFile) - 5) + "_tmp.js"
+		sGeoJSONFilePath = sExportFolder + "geodata\" + Left$(sHTMLFile, Len(sHTMLFile) - 5) + ".json"
+		sGeoJSONFilePathTmp = sExportFolder + "geodata\" + Left$(sHTMLFile, Len(sHTMLFile) - 5) + "_tmp.json"
 		sTitleWebsite = ReadControlValue(ExpDlgETTitleWebPageID)
 
 Exit Sub
@@ -230,15 +226,27 @@ OnError Goto HandleError
 
 Dim sMapWindow As String
 Dim i, iMapWindowID As Integer
+Dim lContinue As Float
 
 	ReDim sColumnsListNonPopup(0)
+
+	Call ResetThemeValues
 	
 	For i = 1 to NumWindows()
 		iMapWindowID = WindowID(i)
 		'Check for thematic layer (ranges or values) in front window
 		'sMapWindow becomes a string of MapBasic statements that can be used in a Run Command statement to duplicate a window
 		sMapWindow = WindowInfo(iMapWindowID, WIN_INFO_CLONEWINDOW)
-		iTheme = ExtractThematicValues(sMapWindow, iMapWindowID, sThemeLayer, sThemeCol, sValuesArray, sColorValsArray, sMaxValue, sDefaultColor)
+		iTheme = ExtractThematicValues(sMapWindow, iMapWindowID, sThemeLayer, sThemeCol, sValuesArray, sColorValsArray, sMaxValue, sDefaultColor, iNoOfThemes)
+		If iNoOfThemes > 1 Then
+			lContinue = Warn("Multiple thematic layers in same Map Window." + Chr$(10) + Chr$(10) + "Click OK to continue without exporting a thematic layer." + Chr$(10) + "Click Cancel to modify Map Window to hold just one thematic layer.", AppName)
+			If lContinue Then
+				iTheme = 0
+				Call ResetThemeValues
+			Else
+				Exit Sub
+			End If
+		End If
 		If iTheme > 0 And sThemeLayer = sTable2Export Then
 			lExportTheme = AskAgain("Do you want to export the thematic layer on " + sThemeLayer + "?", AppName)
 			If Not lExportTheme Then
@@ -255,8 +263,7 @@ Dim i, iMapWindowID As Integer
 	
 	Dialog
 		Title "Layer Settings"
-		Calling CheckForHyperlinks
-		Calling EnableThematicLegendOptions
+		Calling PrepareLayerSettingsDialog
 		Control CheckBox Title "&Map Title:" Value lMapTitle Position 2dW, 1dH ID LSDlgCBMTitleID Calling MapTitleHandler
 		Control EditText Value sMapTilte Position 2dW, 2.5dH Width 46dW ID LSDlgETMTitleID
 		Control StaticText Title "Layer&Group Name (in Leaflet Layers Control):" Position 57.5dW, 1dH
@@ -335,6 +342,22 @@ HandleError:
 End Sub LayerSettingsDialog
 
 '************************************************************************************
+Sub PrepareLayerSettingsDialog
+'************************************************************************************
+
+OnError Goto HandleError
+
+	Call CheckForHyperlinks
+	Call EnableThematicLegendOptions
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub PrepareLayerSettingsDialog
+
+'************************************************************************************
 Sub ColorSettingsDialog
 '************************************************************************************
 
@@ -344,6 +367,8 @@ OnError Goto HandleError
 		Title "Set Color for LineStrings and Polygons"
 		Control Button Title "&Pick Color" Position 3dW, 1dH Calling ColorPicker
 		Control StaticText Title "Current Color: " + sObjectColor Position 16dW, 1.25dH ID PSDlgSTHexColID
+		Control StaticText Title "Modify output html file to change other settings" Position 3dW, 4dH
+		Control StaticText Title "(weight, opacity, highlighting, etc.)." Position 3dW, 5dH
 		
 		Control OKButton Title "&OK"
 		Control CancelButton Title "&Cancel"
@@ -375,16 +400,16 @@ iPointSizeFromArrary = iPointSize - 4
 	Dialog
 		Title "Point Style Settings"
 		Calling SetPointStyleSettingsDlg
-		Control RadioGroup Title "Use &Icon from File*; Use &divIcon" Value iPointStyleSetting Into iPointStyleSetting Position 2dW, 1dH ID PSDlgRGPointStyleID Calling PointStyleSettingChangeHandler
-		Control StaticText Title "*Default blue-arrow.png will be used." Position 2dW, 5dH ID PSDlgSTExpl1ID
-		Control StaticText Title "Manually edit output html to use your own icon from file." Position 2dW, 6dH ID PSDlgSTExpl2ID
-		Control GroupBox Title "divIcon" Position 2dW, 8dH Width 48dW Height 10dH ID PSDlgGBdivIconID
-		Control StaticText Title "Shape:" Position 3dW, 9.5dH ID PSDlgSTShapeID
-		Control RadioGroup Title "Ci&rcle; &Square" Value iPointShape Into iPointShape Position 3dW, 11dH ID PSDlgRGShapeID
-		Control StaticText Title "Size (pixels):" Position 17dW, 9.5dH ID PSDlgSTSizeID
-		Control PopUpMenu Title From Variable sPointSizeArray Value iPointSizeFromArrary Into iPointSizeFromArrary Position 17dW, 11dH ID PSDlgPUMSizeID
-		Control Button Title "&Pick Color" Position 3dW, 15.5dH ID PSDlgBTnPickColorID Calling ColorPicker
-		Control StaticText Title "Thematic colors will be used." Position 16dW, 15.75dH ID PSDlgSTHexColID
+		Control RadioGroup Title "Use &Icon from File*; Use &divIcon; Use circle&Marker" Value iPointStyleSetting Into iPointStyleSetting Position 2dW, 1dH ID PSDlgRGPointStyleID Calling PointStyleSettingChangeHandler
+		Control Button Title "&Pick Color" Position 25dW, 3dH ID PSDlgBTnPickColorID Calling ColorPicker
+		Control StaticText Title "Thematic colors will be used." Position 25dW, 5dH ID PSDlgSTHexColID
+		Control GroupBox Title "divIcon" Position 2dW, 7dH Width 30dW Height 7dH ID PSDlgGBdivIconID
+		Control StaticText Title "Shape:" Position 3dW, 8.5dH ID PSDlgSTShapeID
+		Control RadioGroup Title "Ci&rcle; &Square" Value iPointShape Into iPointShape Position 3dW, 10dH ID PSDlgRGShapeID
+		Control StaticText Title "Size (pixels):" Position 17dW, 8.5dH ID PSDlgSTSizeID
+		Control PopUpMenu Title From Variable sPointSizeArray Value iPointSizeFromArrary Into iPointSizeFromArrary Position 17dW, 10dH ID PSDlgPUMSizeID
+		Control StaticText Title "*Default blue-arrow.png will be used." Position 2dW, 15dH ID PSDlgSTExpl1ID
+		Control StaticText Title "Manually edit output html to use your own icon from file." Position 2dW, 16dH ID PSDlgSTExpl2ID
 		
 		Control OKButton Title "&OK"
 		Control CancelButton Title "&Cancel"
@@ -408,7 +433,7 @@ Sub SetPointStyleSettingsDlg
 OnError Goto HandleError
 
 	If lExportTheme Then
-		iPointStyleSetting = 2
+		iPointStyleSetting = 3
 		Alter Control PSDlgRGPointStyleID Disable Value iPointStyleSetting
 	End If
 
@@ -430,15 +455,19 @@ OnError Goto HandleError
 		Alter Control PSDlgRGShapeID Enable
 		Alter Control PSDlgSTSizeID Enable
 		Alter Control PSDlgPUMSizeID Enable
-		If Not lExportTheme Then
-			Alter Control PSDlgBTnPickColorID Enable
-			Alter Control PSDlgSTHexColID Title "Current Color: " + sObjectColor
-		Else
-			Alter Control PSDlgBTnPickColorID Disable
-			Alter Control PSDlgSTHexColID Title "Thematic colors will be used."
-		End If
+		Alter Control PSDlgBTnPickColorID Enable
+		Alter Control PSDlgSTHexColID Title "Current Color: " + sObjectColor
+	ElseIf iPointStyleSetting = 3 Then
+		Alter Control PSDlgSTExpl1ID Title ""
+		Alter Control PSDlgSTExpl2ID Title ""
+		Alter Control PSDlgGBdivIconID Disable
+		Alter Control PSDlgSTShapeID Disable
+		Alter Control PSDlgRGShapeID Disable
+		Alter Control PSDlgSTSizeID Disable
+		Alter Control PSDlgPUMSizeID Disable
+		Alter Control PSDlgBTnPickColorID Enable
+		Alter Control PSDlgSTHexColID Title "Current Color: " + sObjectColor
 	End If
-	
 
 Exit Sub
 '---------------------------
@@ -498,6 +527,9 @@ Dim i, j As Integer
 Dim lAliasInList, lThemeColInList As Logical
 Dim sAliasValue As String
 
+	sLegendTitle = ReadControlValue(LSDlgETLTtlID)
+	sLegendSubTitle = ReadControlValue(LSDlgETLSTtlID)
+	sMapTilte = ReadControlValue(LSDlgETMTitleID)
 	lAddColumnNames = ReadControlValue(LSDlgCBAddColNmID)
 	lFirstColumnBold = ReadControlValue(LSDlgCBCol1BoldID)
 	lZoomInOnClick = ReadControlValue(LSDlgCBZmClckID)
@@ -1107,3 +1139,26 @@ HandleError:
     Note Error$()
 
 End Sub ProcessPline
+
+'************************************************************************************
+Sub ResetThemeValues 
+'************************************************************************************
+
+OnError Goto HandleError
+
+	lExportTheme = FALSE
+	sThemeLayer = ""
+	sThemeCol = ""
+	ReDim sValuesArray(0)
+	ReDim sColorValsArray(0)
+	sMaxValue = ""
+	sDefaultColor = ""
+	iNoOfThemes = 0
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub ResetThemeValues
+

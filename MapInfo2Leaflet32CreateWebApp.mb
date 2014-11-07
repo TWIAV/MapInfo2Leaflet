@@ -3,7 +3,7 @@
 '**  Create Web Map Application Module
 '**  
 '**  Author:	Egge-Jan Pollé
-'**  Date:		4 November 2014
+'**  Date:		7 November 2014
 '************************************************************************************
 Include "MapInfo2Leaflet32.def"
 
@@ -28,7 +28,7 @@ Include "ReplacementStrings.mb"
 	sCurDate = RegionalLongDate(sCurDate)
 
 '---------------------------------------
-Call CreateDir(sExportFolder + "js")
+Call CreateDir(sExportFolder + "geodata") 'output folder for the GeoJSON files
 Open File sGeoJSONFilePathTmp For Output Access Write As #1 CharSet SystemInfo(SYS_INFO_CHARSET)'"WindowsLatin1"
 Open File sHTMLFilePathTmp For Output Access Write As #2 CharSet SystemInfo(SYS_INFO_CHARSET)'"WindowsLatin1"
 OnError Goto HandleErrorDuringFileCreation
@@ -252,7 +252,7 @@ Print #2, Chr$(9) + Chr$(9) + "<br>"
 Print #2, Chr$(9) + Chr$(9) + "<p>Table : " + sTable2Export + ".TAB, exported from MapInfo Professional (using the MapBasic application " + AppName + ".MBX)</p>"
 Print #2, Chr$(9) + Chr$(9) + "<p>Date: " + sCurDate + "</p>"
 Print #2, Chr$(9) + "</div>"
-Print #2, Chr$(9) + "<script src=" + Chr$(34) + "js/" + PathToFileName$(sGeoJSONFilePath) + Chr$(34) + "></script>"
+Print #2, Chr$(9) + "<script src=" + Chr$(34) + "geodata/" + PathToFileName$(sGeoJSONFilePath) + Chr$(34) + "></script>"
 Print #2, Chr$(9) + "<script src=" + Chr$(34) + "leaflet-0.7.3/leaflet.js" + Chr$(34) + "></script>"
 Print #2, Chr$(9) + "<script src=" + Chr$(34) + "leaflet-plugins/leaflet.label.js" + Chr$(34) + "></script>"
 Print #2, Chr$(9) + "<script src=" + Chr$(34) + "leaflet-plugins/leaflet-search.min.js" + Chr$(34) + "></script>"

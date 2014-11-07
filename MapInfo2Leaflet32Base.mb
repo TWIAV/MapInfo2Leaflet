@@ -3,7 +3,7 @@
 '**  Base Module
 '**  
 '**  Author:	Egge-Jan Pollé
-'**  Date:		3 November 2014
+'**  Date:		7 November 2014
 '************************************************************************************
 Include "MapInfo2Leaflet32.def"
 
@@ -58,14 +58,15 @@ Sub About
 	Dialog 
 		Title "About " + AppName + " (Version " + AppVersion + ")" 
 		Control StaticText Title "With " + AppName + " you can export a MapInfo table to a web mapping application" Position 1dW, 1dH
-		Control StaticText Title "using Leaflet - the output consists of an html file, a js file (containing a GeoJSON" Position 1dW, 2dH
+		Control StaticText Title "using Leaflet - the output consists of an html file, a json file (containing a GeoJSON" Position 1dW, 2dH
 		Control StaticText Title "FeatureCollection) and css files for the styling." Position 1dW, 3dH
-		Control StaticText Title "Leaflet is a modern open-source JavaScript library for mobile-friendly interactive maps." Position 1dW, 5dH
-		Control StaticText Title "More information:" Position 1dW, 7dH
-		Control Button Title "http://leafletjs.com/" Position 16dW, 7dH Calling LeafletWebsite
-		Control StaticText Title "This version is compatible with the 'classic' 32 bit version of MapInfo Professional" Position 1dW, 9.5dH
-		Control StaticText Title "(version 9.5 or higher)" Position 1dW, 10.5dH
-		Control StaticText Title Chr$(169) + " 2014 - TWIAV.NL" Position 48dW, 12dH
+		Control StaticText Title "Optionally you can export a thematic layer to color the geometry based on attribute data." Position 1dW, 5dH
+		Control StaticText Title "Leaflet is a modern open-source JavaScript library for mobile-friendly interactive maps." Position 1dW, 7dH
+		Control StaticText Title "More information:" Position 1dW, 9dH
+		Control Button Title "http://leafletjs.com/" Position 16dW, 9dH Calling LeafletWebsite
+		Control StaticText Title "This version is compatible with the 'classic' 32 bit version of MapInfo Professional" Position 1dW, 11.5dH
+		Control StaticText Title "(version 9.5 or higher)" Position 1dW, 12.5dH
+		Control StaticText Title Chr$(169) + " 2014 - TWIAV.NL" Position 48dW, 14dH
 		Control OKButton Title "&Exit" Calling Bye
 		Control CancelButton Title "&Cancel"
 		Control Button Title "&Help" Calling AddIn_Help
