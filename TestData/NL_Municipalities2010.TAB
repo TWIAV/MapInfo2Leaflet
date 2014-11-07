@@ -27,7 +27,7 @@ Definition Table
     Region_code Char (10) ;
     Region_name Char (15) ;
     Province_code Char (10) ;
-    Province_name Char (13) ;
+    Province_name Char (13) Index 4 ;
     COROP_code Char (10) ;
     COROP_name Char (35) ;
     Police_district_code Char (10) ;
