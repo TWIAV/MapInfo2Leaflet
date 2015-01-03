@@ -3,7 +3,7 @@
 '**  Create Web Map Application Module
 '**  
 '**  Author:	Egge-Jan Pollé
-'**  Date:		7 November 2014
+'**  Date:		3 January 2015
 '************************************************************************************
 Include "MapInfo2Leaflet32.def"
 
@@ -14,7 +14,6 @@ Sub CreateWebMapApplication
 OnError Goto HandleError
 
 Dim i, j, k, m, iNumRows, iObjectType, iGeoJSONLayerType As Integer
-Dim fX, fY As Float
 Dim aColj, aObjCol As Alias
 Dim sString, sPopUpString, sColumnText, sValue, sCurDate, sStyleValue, sIconValue, sZoomToFeatureFunction,
 	sStyleFunction, sHighlightFeatureFunction, sResetHighlightFunction, sOnEachFeatureFunction, sGeoJSONGeomObjType, sCoordinates,
@@ -142,7 +141,7 @@ For i = 1 to iNumRows
 
 			sGeoJSONGeomObjType = "Point"
 
-			sCoordinates = CentroidX(aObjCol) + ", " + CentroidY(aObjCol) 'First Longitude (X), then Latitude (Y)
+			sCoordinates = Format$(CentroidX(aObjCol), "0.######") + ", " + Format$(CentroidY(aObjCol), "0.######") 'First Longitude (X), then Latitude (Y)
 			
 			iGeoJSONLayerType = GeoJSONPointLayer
 
@@ -151,7 +150,7 @@ For i = 1 to iNumRows
 			sGeoJSONGeomObjType = "MultiPoint"
 
 			For m = 1 to ObjectInfo(aObjCol, OBJ_INFO_NPNTS)
-				sCoordinates = sCoordinates + "[" + ObjectNodeX(aObjCol, 1000, m) + ", " + ObjectNodeY(aObjCol, 1000, m) + "]"
+				sCoordinates = sCoordinates + "[" + Format$(ObjectNodeX(aObjCol, 1000, m), "0.######") + ", " + Format$(ObjectNodeY(aObjCol, 1000, m), "0.######") + "]"
 				If m < ObjectInfo(aObjCol, OBJ_INFO_NPNTS) Then
 					sCoordinates = sCoordinates + ", "
 				End If

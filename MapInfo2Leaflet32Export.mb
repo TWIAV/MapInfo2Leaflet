@@ -3,7 +3,7 @@
 '**  Export Module
 '**  
 '**  Author:	Egge-Jan Pollé
-'**  Date:		7 November 2014
+'**  Date:		3 January 2015
 '************************************************************************************
 Include "MapInfo2Leaflet32.def"
 
@@ -1009,16 +1009,16 @@ Dim	iNumPol, iNumNodes, i, j As Integer,
 
 		Create Region
 			Into Variable oCur
-			1 1 (CentroidX(oRegion),CentroidY(oRegion))  'one dummy point (to fool centroid function)
+			1 1 (Format$(CentroidX(oRegion), "0.######"),Format$(CentroidY(oRegion), "0.######"))  'one dummy point (to fool centroid function)
 		For j = 1 To iNumNodes
 			Alter Object oCur
-				Node Add Position 1, j+1 (ObjectNodeX(oRegion,i,j),ObjectNodeY(oRegion,i,j))
+				Node Add Position 1, j+1 (Format$(ObjectNodeX(oRegion,i,j), "0.######"),Format$(ObjectNodeY(oRegion,i,j), "0.######"))
 
 			If j = 1 Then
 				sSubCoordinates = "[ "
 			End If
 
-			sSubCoordinates = sSubCoordinates + " [" + ObjectNodeX(oRegion,i,j) + ", " + ObjectNodeY(oRegion,i,j) + "]"
+			sSubCoordinates = sSubCoordinates + " [" + Format$(ObjectNodeX(oRegion,i,j), "0.######") + ", " + Format$(ObjectNodeY(oRegion,i,j), "0.######") + "]"
 
 			If j < iNumNodes Then
 				sSubCoordinates = sSubCoordinates + ","
@@ -1107,7 +1107,7 @@ Dim	iNumSec, iNumNodes, i, j As Integer,
 
 		For j = 1 To iNumNodes
 
-			sSubCoordinates = sSubCoordinates + " [" + ObjectNodeX(oPline,i,j) + ", " + ObjectNodeY(oPline,i,j) + "]"
+			sSubCoordinates = sSubCoordinates + " [" + Format$(ObjectNodeX(oPline,i,j), "0.######") + ", " + Format$(ObjectNodeY(oPline,i,j), "0.######") + "]"
 
 			If j < iNumNodes Then
 				sSubCoordinates = sSubCoordinates + ","
