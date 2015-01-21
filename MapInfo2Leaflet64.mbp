@@ -1,0 +1,6 @@
+[Link]
+Application=MapInfo2Leaflet64.mbx
+Module=MapInfo2Leaflet64Base.mbo
+Module=MapInfo2Leaflet64Export.mbo
+Module=MapInfo2Leaflet64CreateWebApp.mbo
+Module=MapInfo2Leaflet64Functions.mbo

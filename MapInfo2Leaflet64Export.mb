@@ -1,0 +1,1164 @@
+'************************************************************************************
+'**  MapInfo2Leaflet64 (for the 64 bit version MapInfo Pro 12.5.1 or higher)
+'**  Export Module
+'**  
+'**  Author:	Egge-Jan Pollé
+'**  Date:		20 January 2015
+'************************************************************************************
+Include "MapInfo2Leaflet64.def"
+
+'************************************************************************************
+Sub ExportDialog
+'************************************************************************************
+
+OnError Goto HandleError
+
+	'Set CoordSys to WGS84
+	Set CoordSys Earth Projection 1, 104
+
+	If iPointStyleSetting = 0 Then
+		iPointStyleSetting = 1
+	End If
+
+	If iTarget = 0 Then
+		iTarget = 2
+	End If
+	
+	If sExportFolder = "" Then
+		sExportFolder = GetFolderPath$(FOLDER_MYDOCS) + "\"
+	End If
+
+	Call GetVectorTables
+
+	Dialog
+		Title sDescription
+		Control StaticText Title "Select &Table to Export:" Position 3dW, 1dH
+		Control PopUpMenu Title From Variable sTableList Value 1 Position 3dW, 2.5dH Width 45dW ID ExpDlgPUMTableID Calling EnableLayerSelection
+	
+		Control Button Title "Set &Layer Settings" Position 50dW, 2.5dH ID ExpDlgBtnLaySetID Disable Calling LayerSettingsDialog
+
+		Control StaticText Title "Set Title for &Web Page:" Position 3dW, 4.5dH Disable ID ExpDlgSTTitleWebPageID
+		Control EditText Position 3dW, 6dH Width 75dW Disable ID ExpDlgETTitleWebPageID
+
+		Control StaticText Title "Set Output Folder for &html file (it is recommended to choose an empty folder):" Position 3dW, 8dH Disable ID ExpDlgSTHTMLFileID
+		Control Button Title "..." Width 4dW Position 3dW, 9.25dH Disable ID ExpDlgBtnSetHTMLFilePathID Calling SetHTMLFilePath
+		Control EditText Position 8dW, 9.5dH Width 70dW Disable ID ExpDlgETHTMLFilePathID
+
+		Control Button Title "Set &Point Style Settings" Position 50dW, 11.5dH Hide ID ExpDlgBtnPointStyleSetID Calling PointStyleSettingsDialog
+		Control Button Title "Set Colo&r" Position 50dW, 11.5dH Hide ID ExpDlgBtnSetColorID Calling ColorSettingsDialog
+
+		Control StaticText Title "PROCEDURE:" Position 3dW, 11.5dH
+		Control StaticText Title "Step 1: Select Table to Export" Position 3dW, 13dH
+		Control StaticText Title "Step 2: Set Layer Settings" Position 3dW, 14.5dH Disable ID ExpDlgSTStep2ID
+		Control StaticText Title "Step 3: Set Title for Web Page" Position 3dW, 16dH Disable ID ExpDlgSTStep3ID
+		Control StaticText Title "Step 4: Set Output Folder for html file" Position 3dW, 17.5dH Disable ID ExpDlgSTStep4ID
+		Control StaticText Title "Step 5: Set Style Settings" + Space$(30) Position 3dW, 19dH Disable ID ExpDlgSTStep5ID
+		Control StaticText Title "Step 6: Click OK to Export" Position 3dW, 20.5dH Disable ID ExpDlgSTStep6ID
+	
+		Control OKButton Title "&OK" Disable ID ExpDlgOKBtnID Calling ExpDlgOKBtnHandler
+		Control CancelButton Title "&Cancel" ID ExpDlgCancelBtnID
+		Control Button Title "&Help" Calling AddIn_Help
+		
+		If CommandInfo(CMD_INFO_DLG_OK) Then
+			Call CreateWebMapApplication
+		Else 'User canceled
+			Exit Sub
+		End If
+
+Exit Sub
+'---------------------------
+HandleError:
+    Note Error$()
+
+End Sub ExportDialog
+
+'*********************************************************************************************
+Sub EnableLayerSelection
+'*********************************************************************************************
+
+OnError GoTo HandleError
+
+Dim i As Integer
+Dim fX1, fY1, fX2, fY2, fX1ds, fY1ds, fX2ds, fY2ds, fX1mw, fY1mw, fX2mw, fY2mw As Float
+Dim oMapWindow, oDataset As Object
+
+lMapTitle = TRUE
+sMapTilte = "Map Title"
+
+	sFitBounds = ""
+	sDatasetBounds = ""
+
+	If ReadControlValue(ExpDlgPUMTableID) > 1 Then
+		sTable2Export = sTableList(ReadControlValue(ExpDlgPUMTableID))
+		If NoOfColumns(sTable2Export, sColumnsList) > 0 Then
+			Alter Control ExpDlgBtnLaySetID Enable
+			Alter Control ExpDlgSTStep2ID Enable
+			Alter Control ExpDlgBtnPointStyleSetID Hide
+			Alter Control ExpDlgBtnSetColorID Hide
+			sHTMLFilePath = sExportFolder + sTable2Export + ".html"
+			sHTMLFilePathTmp = sExportFolder + sTable2Export + "_tmp.html"
+			sGeoJSONFilePath = sExportFolder + "js\" + sTable2Export + ".js"
+			sGeoJSONFilePathTmp = sExportFolder + "js\" + sTable2Export + "_tmp.js"
+			Alter Control ExpDlgETHTMLFilePathID Value sHTMLFilePath
+			sTitleWebsite = ReplaceSubStringWith(sTable2Export, Chr$(95), Chr$(32))
+			Alter Control ExpDlgETTitleWebPageID Value sTitleWebsite
+			sLayerNamePub = ReplaceSubStringWith(sTable2Export, Chr$(95), Chr$(32))  'Visible for the user in the Leaflet Layers Control
+			sFeatureCollection = ReplaceSubStringWith(LCase$(sLayerNamePub), Chr$(32), Chr$(95)) 'Used as the GeoJSON var name
+
+			ReDim sColumnsListPopup(UBound(sColumnsList) - 1)
+			For i = 2 To UBound(sColumnsList)
+				sColumnsListPopup(i - 1) = sColumnsList(i)
+			Next
+
+			'Take the minimum and maximum x- and y-coordinates of all objects in the table
+			fX1 = TableInfo(sTable2Export, TAB_INFO_MINX)
+			fY1 = TableInfo(sTable2Export, TAB_INFO_MINY)
+			fX2 = TableInfo(sTable2Export, TAB_INFO_MAXX)
+			fY2 = TableInfo(sTable2Export, TAB_INFO_MAXY)
+
+			'Put an additional margin around all the objects in the table
+			fX1ds = fX1 - .15*(fX2-fX1)
+			fY1ds = fY1 - .15*(fY2-fY1)
+			fX2ds = fX2 + .15*(fX2-fX1)
+			fY2ds = fY2 + .15*(fY2-fY1)
+			
+			For i = 1 To NumWindows()
+				If LayerIsInMap(WindowID(i), sTable2Export) Then
+					'If the table is present in a Map Window in MapInfo Professional during export
+					'the map in the web page will be fit to the bounds of this Map Window
+					fX1mw = MapperInfo(WindowID(i), MAPPER_INFO_MINX)
+					fY1mw = MapperInfo(WindowID(i), MAPPER_INFO_MINY)
+					fX2mw = MapperInfo(WindowID(i), MAPPER_INFO_MAXX)
+					fY2mw = MapperInfo(WindowID(i), MAPPER_INFO_MAXY)
+					
+					sFitBounds = "fitBounds([[" + fY1mw + ", " + fX1mw + "], [" + fY2mw + ", " + fX2mw + "]])" 'South - West - North - East
+					
+					Create Rect Into Variable oMapWindow (fX1mw, fY1mw) (fX2mw, fY2mw)
+					Create Rect Into Variable oDataset (fX1ds, fY1ds) (fX2ds, fY2ds)
+					
+					If oDataset Entirely Within oMapWindow Then
+						fX1ds = fX1mw
+						fY1ds = fY1mw
+						fX2ds = fX2mw
+						fY2ds = fY2mw
+					End If
+				End If
+			Next
+			If sFitBounds = "" Then
+				'If the table is not present in a Map Window in MapInfo Professional during export
+				'the map in the web page will be fit to the central part of the dataset
+				fX1mw = fX1 + .35*(fX2-fX1)
+				fY1mw = fY1 + .35*(fY2-fY1)
+				fX2mw = fX2 - .35*(fX2-fX1)
+				fY2mw = fY2 - .35*(fY2-fY1)
+				sFitBounds = "fitBounds([[" + fY1mw + ", " + fX1mw + "], [" + fY2mw + ", " + fX2mw + "]])"
+			End If
+
+			sDatasetBounds = Chr$(9) + Chr$(9) + "// These are the bounds of the " + sFeatureCollection + " dataset, plus a margin" + Chr$(10)
+			sDatasetBounds = sDatasetBounds + Chr$(9) + Chr$(9) + "var southWest = L.latLng(" + fY1ds + ", " + fX1ds + ")," + Chr$(10)
+			sDatasetBounds = sDatasetBounds + Chr$(9) + Chr$(9) + Chr$(9) + "northEast = L.latLng(" + fY2ds + ", " + fX2ds + ")," + Chr$(10)
+			sDatasetBounds = sDatasetBounds + Chr$(9) + Chr$(9) + Chr$(9) + "bounds = L.latLngBounds(southWest, northEast);"
+
+		End If
+	Else
+		sTable2Export = ""
+		Alter Control ExpDlgBtnLaySetID Disable
+		Alter Control ExpDlgSTStep2ID Disable
+		Alter Control ExpDlgOKBtnID Disable
+		sGeoJSONFilePathTmp = ""
+		sGeoJSONFilePath = ""
+		sHTMLFilePathTmp = ""
+		sHTMLFilePath = ""
+		Alter Control ExpDlgETHTMLFilePathID Value sHTMLFilePath Disable
+		sTitleWebsite = ""
+		Alter Control ExpDlgETTitleWebPageID Value sTitleWebsite Disable
+		Alter Control ExpDlgBtnPointStyleSetID Hide
+		Alter Control ExpDlgBtnSetColorID Hide
+		Alter Control ExpDlgSTTitleWebPageID Disable
+		Alter Control ExpDlgSTHTMLFileID Disable
+		Alter Control ExpDlgBtnSetHTMLFilePathID Disable
+		sLayerNamePub =  ""
+		sFeatureCollection = ""
+		ReDim sColumnsListPopup(0)
+		Alter Control ExpDlgSTStep2ID Disable
+		Alter Control ExpDlgSTStep3ID Disable
+		Alter Control ExpDlgSTStep4ID Disable
+		Alter Control ExpDlgSTStep5ID Disable
+		Alter Control ExpDlgSTStep6ID Disable
+		Alter Control ExpDlgOKBtnID Disable
+	End If
+
+Exit Sub
+'---------------------------
+HandleError:
+    Note Error$()
+
+End Sub EnableLayerSelection
+
+'************************************************************************************
+Sub ExpDlgOKBtnHandler
+'************************************************************************************
+
+OnError Goto HandleError
+
+Dim sHTMLFile As String
+
+		sHTMLFilePath = ReadControlValue(ExpDlgETHTMLFilePathID)
+		sHTMLFilePathTmp = Left$(sHTMLFilePath, Len(sHTMLFilePath) - 5) + "_tmp.html"
+		sExportFolder = PathToDirectory$(sHTMLFilePath)
+		sHTMLFile = PathToFileName$(sHTMLFilePath)
+		sGeoJSONFilePath = sExportFolder + "geodata\" + Left$(sHTMLFile, Len(sHTMLFile) - 5) + ".json"
+		sGeoJSONFilePathTmp = sExportFolder + "geodata\" + Left$(sHTMLFile, Len(sHTMLFile) - 5) + "_tmp.json"
+		sTitleWebsite = ReadControlValue(ExpDlgETTitleWebPageID)
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub ExpDlgOKBtnHandler
+
+'************************************************************************************
+Sub LayerSettingsDialog
+'************************************************************************************
+
+OnError Goto HandleError
+
+Dim sMapWindow As String
+Dim i, iMapWindowID As Integer
+Dim lContinue As Float
+
+	ReDim sColumnsListNonPopup(0)
+
+	Call ResetThemeValues
+	
+	For i = 1 to NumWindows()
+		iMapWindowID = WindowID(i)
+		'Check for thematic layer (ranges or values) in front window
+		'sMapWindow becomes a string of MapBasic statements that can be used in a Run Command statement to duplicate a window
+		sMapWindow = WindowInfo(iMapWindowID, WIN_INFO_CLONEWINDOW)
+		iTheme = ExtractThematicValues(sMapWindow, iMapWindowID, sThemeLayer, sThemeCol, sValuesArray, sColorValsArray, sMaxValue, sDefaultColor, iNoOfThemes)
+		If iNoOfThemes > 1 Then
+			lContinue = Warn("Multiple thematic layers in same Map Window." + Chr$(10) + Chr$(10) + "Click OK to continue without exporting a thematic layer." + Chr$(10) + "Click Cancel to modify Map Window to hold just one thematic layer.", AppName)
+			If lContinue Then
+				iTheme = 0
+				Call ResetThemeValues
+			Else
+				Exit Sub
+			End If
+		End If
+		If iTheme > 0 And sThemeLayer = sTable2Export Then
+			lExportTheme = AskAgain("Do you want to export the thematic layer on " + sThemeLayer + "?", AppName)
+			If Not lExportTheme Then
+				sThemeLayer = ""
+				sThemeCol = ""
+				ReDim sValuesArray(0)
+				ReDim sColorValsArray(0)
+				sMaxValue = ""
+				sDefaultColor = ""
+			End If
+			Exit For
+		End If
+	Next
+	
+	Dialog
+		Title "Layer Settings"
+		Calling PrepareLayerSettingsDialog
+		Control CheckBox Title "&Map Title:" Value lMapTitle Position 2dW, 1dH ID LSDlgCBMTitleID Calling MapTitleHandler
+		Control EditText Value sMapTilte Position 2dW, 2.5dH Width 46dW ID LSDlgETMTitleID
+		Control StaticText Title "Layer&Group Name (in Leaflet Layers Control):" Position 57.5dW, 1dH
+		Control EditText Value sLayerNamePub Position 57.5dW, 2.5dH Width 37dW ID LSDlgETLNameID
+		Control StaticText Title "Columns Not to be Added to Pop&up:" Position 2dW, 4.5dH
+		Control ListBox Position 2dW, 6.5dH Width 37dW Height 17dH ID LSDlgLBLayersNotAddedID Calling NonAddedColumnsHandler
+		Control StaticText Title "Columns to be Added to &Popup:" Position 57.5dW, 4.5dH
+		Control ListBox Title From Variable sColumnsListPopup Position 57.5dW, 6.5dH Width 37dW Height 17dH ID LSDlgLBLayersAddedID Calling AddedColumnsHandler
+		Control Button Title "&Add >" Position 39.75dW, 6.5dH Width 16.5dW Height 3dH Disable ID LSDlgBtnAddID Calling ModifyColumnsListPopupAdd
+		Control Button Title "A&dd All >>" Position 39.75dW, 10dH Width 16.5dW Height 3dH Disable ID LSDlgBtnAddAllID Calling ModifyColumnsListPopupAddAll
+		Control Button Title "< &Remove" Position 39.75dW, 17dH Width 16.5dW Height 3dH Disable ID LSDlgBtnRemID Calling ModifyColumnsListPopupRemove
+		Control Button Title "<< R&emove All" Position 39.75dW, 20.5dH Width 16.5dW Height 3dH ID LSDlgBtnRemAllID Calling ModifyColumnsListPopupRemoveAll
+		Control GroupBox Title "Hyperlink:" Position 2dW, 24.5dH Width 40.5dW Height 9dH Disable ID LSDlgGBHLnkID
+		Control StaticText Title "Column:" Position 3dW, 26dH Disable ID LSDlgSTHLColID
+		Control EditText Position 10.5dW, 26dH Width 30.5dW Disable ID LSDlgETHLColID
+		Control StaticText Title "A&lias:" Position 3dW, 28dH Disable ID LSDlgSTAliasID
+		Control PopupMenu Position 10.5dW, 28dH Width 30.5dW Disable ID LSDlgPUMAliasID
+		Control RadioGroup Position 21dW, 30dH Title "&Same Window;New &Window or Tab" Value iTarget Disable ID LSDlgRGTargetID
+		Control Button Title "Re&move Hyperlink" Position 3dW, 31dH Width 16.5dW Disable ID LSDlgBtnRemHLID Calling RemoveHyperLink
+
+		Control GroupBox Title "Popup:" Position 43.5dW, 24.5dH Width 21dW Height 5dH Disable ID LSDlgGBPopupID
+		Control CheckBox Title "Add Column &Names" Value lAddColumnNames Position 44.5dW, 26dH ID LSDlgCBAddColNmID Calling AddColNamesHandler
+		Control CheckBox Title "First Column &Bold" Value lFirstColumnBold Position 44.5dW, 28dH ID LSDlgCBCol1BoldID
+
+		Control StaticText Title "&Tooltip:" Position 66dW, 24.5dH ID LSDlgSTTTipID
+		Control PopupMenu Title From Variable sColumnsList Value 2 Position 66dW, 26dH Width 28.5dW ID LSDlgPUMTTipID
+
+		Control GroupBox Title "Thematic Legend:" Position 43.5dW, 30dH Width 41.5dW Height 5.5dH Disable ID LSDlgGBThemeTitlesID
+		Control StaticText Title "T&itle:" Position 44.5dW, 31.5dH Disable ID LSDlgSTLTtlID
+		Control EditText Position 53dW, 31.5dH Width 30.5dW Disable ID LSDlgETLTtlID
+		Control StaticText Title "Sub T&itle:" Position 44.5dW, 33.5dH Disable ID LSDlgSTLSTtlID
+		Control EditText Position 53dW, 33.5dH Width 30.5dW Disable ID LSDlgETLSTtlID
+
+		Control CheckBox Title "&Zoom in to marker/feature on click" Value lZoomInOnClick Position 2dW, 34dH ID LSDlgCBZmClckID
+		
+		Control OKButton Title "&OK" ID LSDlgOKBtnID Calling LSDlgOKBtnHandler
+		Control CancelButton Title "&Cancel"
+		Control Button Title "&Help" Calling AddIn_Help
+
+		If CommandInfo(CMD_INFO_DLG_OK) Then
+			If lAddColumnNames Then
+				lFirstColumnBold = FALSE
+			End If
+			Alter Control ExpDlgETHTMLFilePathID Enable
+			Alter Control ExpDlgETTitleWebPageID Enable
+			Alter Control ExpDlgSTTitleWebPageID Enable
+			Alter Control ExpDlgSTHTMLFileID Enable
+			Alter Control ExpDlgBtnSetHTMLFilePathID Enable
+			If IsPointLineOrPolygonTable(sTable2Export) = 1 Then
+				If lExportTheme Then
+					Alter Control ExpDlgSTStep5ID Enable Title "Step 5: Thematic colors will be used."
+					iPointStyleSetting = 3 'circleMarker for thematic map
+				Else
+					Alter Control ExpDlgBtnPointStyleSetID Show
+					Alter Control ExpDlgSTStep5ID Enable Title "Step 5: Set Point Style Settings"
+				End If
+			ElseIf IsPointLineOrPolygonTable(sTable2Export) In (2,3) Then
+				If lExportTheme Then
+					Alter Control ExpDlgSTStep5ID Enable Title "Step 5: Thematic colors will be used."
+				Else
+					Alter Control ExpDlgBtnSetColorID Show
+					Alter Control ExpDlgSTStep5ID Enable Title "Step 5: Set Color"
+				End If
+			End If
+			Alter Control ExpDlgSTStep3ID Enable
+			Alter Control ExpDlgSTStep4ID Enable
+			Alter Control ExpDlgSTStep6ID Enable
+			Alter Control ExpDlgOKBtnID Enable
+		End If
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub LayerSettingsDialog
+
+'************************************************************************************
+Sub PrepareLayerSettingsDialog
+'************************************************************************************
+
+OnError Goto HandleError
+
+	Call CheckForHyperlinks
+	Call EnableThematicLegendOptions
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub PrepareLayerSettingsDialog
+
+'************************************************************************************
+Sub ColorSettingsDialog
+'************************************************************************************
+
+OnError Goto HandleError
+
+	Dialog
+		Title "Set Color for LineStrings and Polygons"
+		Control Button Title "&Pick Color" Position 3dW, 1dH Calling ColorPicker
+		Control StaticText Title "Current Color: " + sObjectColor Position 16dW, 1.25dH ID PSDlgSTHexColID
+		Control StaticText Title "Modify output html file to change other settings" Position 3dW, 4dH
+		Control StaticText Title "(weight, opacity, highlighting, etc.)." Position 3dW, 5dH
+		
+		Control OKButton Title "&OK"
+		Control CancelButton Title "&Cancel"
+		Control Button Title "&Help" Calling AddIn_Help
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub ColorSettingsDialog
+
+'************************************************************************************
+Sub PointStyleSettingsDialog
+'************************************************************************************
+
+OnError Goto HandleError
+
+Dim sPointSizeArray(21) As String
+Dim i, iPointSizeFromArrary As Integer
+
+
+For i = 5 to 25
+	sPointSizeArray(i-4) = i
+Next
+
+iPointSizeFromArrary = iPointSize - 4
+
+	Dialog
+		Title "Point Style Settings"
+		Calling SetPointStyleSettingsDlg
+		Control RadioGroup Title "Use &Icon from File*; Use &divIcon; Use circle&Marker" Value iPointStyleSetting Into iPointStyleSetting Position 2dW, 1dH ID PSDlgRGPointStyleID Calling PointStyleSettingChangeHandler
+		Control Button Title "&Pick Color" Position 25dW, 3dH ID PSDlgBTnPickColorID Calling ColorPicker
+		Control StaticText Title "Thematic colors will be used." Position 25dW, 5dH ID PSDlgSTHexColID
+		Control GroupBox Title "divIcon" Position 2dW, 7dH Width 30dW Height 7dH ID PSDlgGBdivIconID
+		Control StaticText Title "Shape:" Position 3dW, 8.5dH ID PSDlgSTShapeID
+		Control RadioGroup Title "Ci&rcle; &Square" Value iPointShape Into iPointShape Position 3dW, 10dH ID PSDlgRGShapeID
+		Control StaticText Title "Size (pixels):" Position 17dW, 8.5dH ID PSDlgSTSizeID
+		Control PopUpMenu Title From Variable sPointSizeArray Value iPointSizeFromArrary Into iPointSizeFromArrary Position 17dW, 10dH ID PSDlgPUMSizeID
+		Control StaticText Title "*Default blue-arrow.png will be used." Position 2dW, 15dH ID PSDlgSTExpl1ID
+		Control StaticText Title "Manually edit output html to use your own icon from file." Position 2dW, 16dH ID PSDlgSTExpl2ID
+		
+		Control OKButton Title "&OK"
+		Control CancelButton Title "&Cancel"
+		Control Button Title "&Help" Calling AddIn_Help
+
+		If CommandInfo(CMD_INFO_DLG_OK) Then
+			iPointSize = iPointSizeFromArrary + 4
+		End If
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub PointStyleSettingsDialog
+
+'************************************************************************************
+Sub SetPointStyleSettingsDlg
+'************************************************************************************
+
+OnError Goto HandleError
+
+	If lExportTheme Then
+		iPointStyleSetting = 3
+		Alter Control PSDlgRGPointStyleID Disable Value iPointStyleSetting
+	End If
+
+	If iPointStyleSetting = 1 Then
+		Alter Control PSDlgSTExpl1ID Title "*Default blue-arrow.png will be used."
+		Alter Control PSDlgSTExpl2ID Title "Manually edit output html to use your own icon from file."
+		Alter Control PSDlgGBdivIconID Disable
+		Alter Control PSDlgSTShapeID Disable
+		Alter Control PSDlgRGShapeID Disable
+		Alter Control PSDlgSTSizeID Disable
+		Alter Control PSDlgPUMSizeID Disable
+		Alter Control PSDlgBTnPickColorID Disable
+		Alter Control PSDlgSTHexColID Title ""
+	ElseIf iPointStyleSetting = 2 Then
+		Alter Control PSDlgSTExpl1ID Title ""
+		Alter Control PSDlgSTExpl2ID Title ""
+		Alter Control PSDlgGBdivIconID Enable
+		Alter Control PSDlgSTShapeID Enable
+		Alter Control PSDlgRGShapeID Enable
+		Alter Control PSDlgSTSizeID Enable
+		Alter Control PSDlgPUMSizeID Enable
+		Alter Control PSDlgBTnPickColorID Enable
+		Alter Control PSDlgSTHexColID Title "Current Color: " + sObjectColor
+	ElseIf iPointStyleSetting = 3 Then
+		Alter Control PSDlgSTExpl1ID Title ""
+		Alter Control PSDlgSTExpl2ID Title ""
+		Alter Control PSDlgGBdivIconID Disable
+		Alter Control PSDlgSTShapeID Disable
+		Alter Control PSDlgRGShapeID Disable
+		Alter Control PSDlgSTSizeID Disable
+		Alter Control PSDlgPUMSizeID Disable
+		Alter Control PSDlgBTnPickColorID Enable
+		Alter Control PSDlgSTHexColID Title "Current Color: " + sObjectColor
+	End If
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub SetPointStyleSettingsDlg
+
+'************************************************************************************
+Sub PointStyleSettingChangeHandler
+'************************************************************************************
+
+OnError Goto HandleError
+
+	iPointStyleSetting = ReadControlValue(PSDlgRGPointStyleID)
+	Call SetPointStyleSettingsDlg
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub PointStyleSettingChangeHandler
+
+'************************************************************************************
+Sub ColorPicker
+'************************************************************************************
+
+OnError Goto HandleError
+
+Dim iColor As Integer
+
+	iColor =  colDlg(iMIColor)
+
+	If iColor >= 0 Then
+		iMIColor = iColor
+	End If
+
+	sObjectColor = hexCol(iMIColor)
+	
+	Alter Control PSDlgSTHexColID Title "Current Color: " + sObjectColor
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub ColorPicker
+
+'************************************************************************************
+Sub LSDlgOKBtnHandler
+'************************************************************************************
+
+OnError Goto HandleError
+
+Dim i, j As Integer
+Dim lAliasInList, lThemeColInList As Logical
+Dim sAliasValue As String
+
+	sLegendTitle = ReadControlValue(LSDlgETLTtlID)
+	sLegendSubTitle = ReadControlValue(LSDlgETLSTtlID)
+	sMapTilte = ReadControlValue(LSDlgETMTitleID)
+	lAddColumnNames = ReadControlValue(LSDlgCBAddColNmID)
+	lFirstColumnBold = ReadControlValue(LSDlgCBCol1BoldID)
+	lZoomInOnClick = ReadControlValue(LSDlgCBZmClckID)
+	iTarget = ReadControlValue(LSDlgRGTargetID)
+	sLayerNamePub = ReadControlValue(LSDlgETLNameID)  'Visible for the user in the Leaflet Layers Control
+	sFeatureCollection = ReplaceSubStringWith(LCase$(sLayerNamePub), Chr$(32), Chr$(95)) 'Used as the GeoJSON var name
+	If ReadControlValue(LSDlgPUMTTipID) > 1 Then
+		sTooltipCol = sColumnsList(ReadControlValue(LSDlgPUMTTipID))
+	Else
+		sTooltipCol = sColumnsList(2)
+	End If
+
+	ReDim Columns2Export(UBound(sColumnsListPopup))
+
+	For i = 1 to UBound(sColumnsListPopup)
+		Columns2Export(i).sColName = sColumnsListPopup(i)
+		Columns2Export(i).lInToolTip = TRUE
+		If sColumnsListPopup(i) = sHyperlink Then
+			Columns2Export(i).lHyperlink = TRUE
+			If ReadControlValue(LSDlgPUMAliasID) > 1 Then
+				Columns2Export(i).sAlias = sColumnsList(ReadControlValue(LSDlgPUMAliasID))
+			Else
+				Columns2Export(i).sAlias = sHyperlink
+			End If
+		Else
+			Columns2Export(i).lHyperlink = FALSE
+			Columns2Export(i).sAlias = ""
+		End If
+	Next
+	
+	If sHyperlink <> "" Then
+		For j = 1 to Ubound(Columns2Export)
+			If Columns2Export(j).sColName = sColumnsList(ReadControlValue(LSDlgPUMAliasID)) Then
+				lAliasInList = TRUE
+				Exit For
+			Else
+				lAliasInList = FALSE
+			End If
+		Next
+		If Not lAliasInList Then
+			j = Ubound(Columns2Export) + 1
+			Redim Columns2Export(j)
+			Columns2Export(i).sColName = sColumnsList(ReadControlValue(LSDlgPUMAliasID))
+			Columns2Export(i).lInToolTip = FALSE
+		End If
+	End If
+
+	If lExportTheme Then
+		For j = 1 to Ubound(Columns2Export)
+			If Columns2Export(j).sColName = sThemeCol Then
+				lThemeColInList = TRUE
+				Exit For
+			Else
+				lThemeColInList = FALSE
+			End If
+		Next
+		If Not lThemeColInList Then
+			j = Ubound(Columns2Export) + 1
+			Redim Columns2Export(j)
+			Columns2Export(i).sColName = sThemeCol
+			Columns2Export(i).lInToolTip = FALSE
+		End If
+	End If
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub LSDlgOKBtnHandler
+
+'*********************************************************************************************
+Sub NonAddedColumnsHandler
+'*********************************************************************************************
+
+OnError GoTo HandleError
+
+	If CommandInfo(CMD_INFO_DLG_DBL) Then
+		Call ModifyColumnsListPopupAdd
+		Alter Control LSDlgBtnAddID Disable
+	Else
+		Alter Control LSDlgBtnAddID Enable
+	End If
+
+Exit Sub
+'---------------------------
+HandleError:
+    Note Error$()
+
+End Sub NonAddedColumnsHandler
+
+'*********************************************************************************************
+Sub AddedColumnsHandler
+'*********************************************************************************************
+
+OnError GoTo HandleError
+
+	If CommandInfo(CMD_INFO_DLG_DBL) Then
+		Call ModifyColumnsListPopupRemove
+		Alter Control LSDlgBtnRemID Disable
+	Else
+		Alter Control LSDlgBtnRemID Enable
+	End If
+
+Exit Sub
+'---------------------------
+HandleError:
+    Note Error$()
+
+End Sub AddedColumnsHandler
+
+'*********************************************************************************************
+Sub ModifyColumnsListPopupAdd
+'*********************************************************************************************
+
+OnError GoTo HandleError
+
+	Call ModifyColumnsListPopup(1)
+
+Exit Sub
+'---------------------------
+HandleError:
+    Note Error$()
+
+End Sub ModifyColumnsListPopupAdd
+
+'*********************************************************************************************
+Sub ModifyColumnsListPopupAddAll
+'*********************************************************************************************
+
+OnError GoTo HandleError
+
+	Call ModifyColumnsListPopup(2)
+
+Exit Sub
+'---------------------------
+HandleError:
+    Note Error$()
+
+End Sub ModifyColumnsListPopupAddAll
+
+'*********************************************************************************************
+Sub ModifyColumnsListPopupRemove
+'*********************************************************************************************
+
+OnError GoTo HandleError
+
+	Call ModifyColumnsListPopup(3)
+
+Exit Sub
+'---------------------------
+HandleError:
+    Note Error$()
+
+End Sub ModifyColumnsListPopupRemove
+
+'*********************************************************************************************
+Sub ModifyColumnsListPopupRemoveAll
+'*********************************************************************************************
+
+OnError GoTo HandleError
+
+	Call ModifyColumnsListPopup(4)
+
+Exit Sub
+'---------------------------
+HandleError:
+    Note Error$()
+
+End Sub ModifyColumnsListPopupRemoveAll
+
+'*********************************************************************************************
+Sub ModifyColumnsListPopup(ByVal iOperation As Integer)
+'*********************************************************************************************
+
+OnError GoTo HandleError
+
+Dim i, j, k As Integer
+Dim sTempArray() As String
+
+	Do Case iOperation
+		Case 1 'Add
+			i = UBound(sColumnsListPopup) + 1
+			Redim sColumnsListPopup(i)
+			sColumnsListPopup(i) = sColumnsListNonPopup(ReadControlValue(LSDlgLBLayersNotAddedID))
+
+			For i = 1 to UBound(sColumnsListNonPopup)
+				If sColumnsListNonPopup(i) <>  sColumnsListNonPopup(ReadControlValue(LSDlgLBLayersNotAddedID)) Then
+					j = UBound(sTempArray) + 1								
+					ReDim sTempArray(j)
+					sTempArray(j) = sColumnsListNonPopup(i)
+				End If
+			Next
+			ReDim sColumnsListNonPopup(UBound(sTempArray))
+			For i = 1 to UBound(sTempArray)
+				sColumnsListNonPopup(i) = sTempArray(i)			
+			Next
+			ReDim sTempArray(0)
+
+			Alter Control LSDlgLBLayersNotAddedID Title From Variable sColumnsListNonPopup
+			Alter Control LSDlgLBLayersAddedID Title From Variable sColumnsListPopup
+			Alter Control LSDlgBtnAddID Disable
+			Alter Control LSDlgBtnAddAllID Disable
+			Alter Control LSDlgBtnRemID Disable
+			If UBound(sColumnsListNonPopup) = 0 Then
+				Alter Control LSDlgBtnRemAllID Enable
+			Else
+				Alter Control LSDlgBtnRemAllID Disable
+			End If
+			
+		Case 2 'Add All
+			ReDim sColumnsListPopup(UBound(sColumnsListNonPopup))
+			For i = 1 to UBound(sColumnsListNonPopup)
+				sColumnsListPopup(i) = sColumnsListNonPopup(i)			
+			Next
+			ReDim sColumnsListNonPopup(0)
+			Alter Control LSDlgLBLayersNotAddedID Title From Variable sColumnsListNonPopup
+			Alter Control LSDlgLBLayersAddedID Title From Variable sColumnsListPopup
+			Alter Control LSDlgBtnAddID Disable
+			Alter Control LSDlgBtnAddAllID Disable
+			Alter Control LSDlgBtnRemID Disable
+			Alter Control LSDlgBtnRemAllID Enable
+		Case 3 'Remove
+			i = UBound(sColumnsListNonPopup) + 1
+			Redim sColumnsListNonPopup(i)
+			sColumnsListNonPopup(i) = sColumnsListPopup(ReadControlValue(LSDlgLBLayersAddedID))
+
+			For i = 1 to UBound(sColumnsListPopup)
+				If sColumnsListPopup(i) <>  sColumnsListPopup(ReadControlValue(LSDlgLBLayersAddedID)) Then
+					j = UBound(sTempArray) + 1								
+					ReDim sTempArray(j)
+					sTempArray(j) = sColumnsListPopup(i)
+				End If
+			Next
+			ReDim sColumnsListPopup(UBound(sTempArray))
+			For i = 1 to UBound(sTempArray)
+				sColumnsListPopup(i) = sTempArray(i)			
+			Next
+			ReDim sTempArray(0)
+
+			Alter Control LSDlgLBLayersNotAddedID Title From Variable sColumnsListNonPopup
+			Alter Control LSDlgLBLayersAddedID Title From Variable sColumnsListPopup
+			Alter Control LSDlgBtnAddID Disable
+			If UBound(sColumnsListPopup) = 0 Then
+				Alter Control LSDlgBtnAddAllID Enable
+			Else
+				Alter Control LSDlgBtnAddAllID Disable
+			End If
+			Alter Control LSDlgBtnRemID Disable
+			Alter Control LSDlgBtnRemAllID Disable
+		
+		Case 4 'Remove All
+			ReDim sColumnsListNonPopup(UBound(sColumnsListPopup))
+			For i = 1 to UBound(sColumnsListPopup)
+				sColumnsListNonPopup(i) = sColumnsListPopup(i)			
+			Next
+			ReDim sColumnsListPopup(0)
+			Alter Control LSDlgLBLayersNotAddedID Title From Variable sColumnsListNonPopup
+			Alter Control LSDlgLBLayersAddedID Title From Variable sColumnsListPopup
+			Alter Control LSDlgBtnAddID Disable
+			Alter Control LSDlgBtnAddAllID Enable
+			Alter Control LSDlgBtnRemID Disable
+			Alter Control LSDlgBtnRemAllID Disable
+	End Case
+
+Exit Sub
+'---------------------------
+HandleError:
+    Note Error$()
+
+End Sub ModifyColumnsListPopup
+
+'************************************************************************************
+Sub MapTitleHandler
+'************************************************************************************
+
+OnError Goto HandleError
+
+	If ReadControlValue(LSDlgCBMTitleID) Then
+		Alter Control LSDlgETMTitleID Enable
+	Else
+		Alter Control LSDlgETMTitleID Value "" Disable
+	End If
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub MapTitleHandler
+
+'************************************************************************************
+Sub AddColNamesHandler
+'************************************************************************************
+
+OnError Goto HandleError
+
+	If ReadControlValue(LSDlgCBAddColNmID) Then
+		Alter Control LSDlgCBCol1BoldID Value FALSE Disable
+	Else
+		Alter Control LSDlgCBCol1BoldID Enable
+	End If
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub AddColNamesHandler
+
+'************************************************************************************
+Sub EnableThematicLegendOptions
+'************************************************************************************
+
+OnError Goto HandleError
+
+		If lExportTheme Then
+			Alter Control LSDlgGBThemeTitlesID Enable
+			Alter Control LSDlgSTLTtlID Enable
+			Alter Control LSDlgETLTtlID Enable Value sThemeCol
+			Alter Control LSDlgSTLSTtlID Enable
+			Alter Control LSDlgETLSTtlID Enable
+		End If
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub EnableThematicLegendOptions
+
+'************************************************************************************
+Sub CheckForHyperlinks
+'************************************************************************************
+
+OnError Goto HandleError
+
+Dim sQuery As String
+Dim i, j, k As Integer
+
+	For i = 2 to UBound(sColumnsList)
+		k = 0
+		sQuery = "Select " + sColumnsList(i) + " From " + sTable2Export + " Group By 1 Into TestTable"
+		Run Command sQuery
+	
+		For j = 1 To TableInfo(TestTable, TAB_INFO_NROWS)
+			Fetch Rec j From TestTable
+			If LooksLikeURL(TestTable.Col1) Then
+				k = k + 1
+			End If
+		Next
+	
+		If k > 0 Then
+			sHyperlink = sColumnsList(i)
+			Alter Control LSDlgGBHLnkID Enable
+			Alter Control LSDlgSTHLColID Enable
+			Alter Control LSDlgETHLColID Disable Value sHyperlink
+			Alter Control LSDlgSTAliasID Enable
+			Alter Control LSDlgPUMAliasID Enable Title From Variable sColumnsList Value i
+			Alter Control LSDlgRGTargetID Enable Value iTarget
+			Alter Control LSDlgBtnRemHLID Enable
+			Exit For
+		End If
+	Next
+
+	Close Table TestTable
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub CheckForHyperlinks
+
+'************************************************************************************
+Sub RemoveHyperLink
+'************************************************************************************
+
+OnError Goto HandleError
+
+		sHyperlink = ""
+		Alter Control LSDlgGBHLnkID Disable
+		Alter Control LSDlgSTHLColID Disable
+		Alter Control LSDlgETHLColID Disable Value sHyperlink
+		Alter Control LSDlgSTAliasID Disable
+		Alter Control LSDlgPUMAliasID Disable Title ""
+		Alter Control LSDlgRGTargetID Disable
+		Alter Control LSDlgBtnRemHLID Disable
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub RemoveHyperLink
+
+'************************************************************************************
+Sub SetHTMLFilePath 
+'************************************************************************************
+
+OnError Goto HandleError
+
+Dim sNewHTMLFilePath As String
+
+	'Here the user is given the possibility to choose a folder and name for the html file
+	sNewHTMLFilePath = FileSaveAsDlg(PathToDirectory$(sHTMLFilePath), PathToFileName$(sHTMLFilePath), "*.*", "Choose a folder and a name for the html file")
+	
+	If sNewHTMLFilePath <> "" Then
+		sHTMLFilePath = sNewHTMLFilePath
+		sExportFolder = PathToDirectory$(sHTMLFilePath)
+		Alter Control ExpDlgETHTMLFilePathID Value sHTMLFilePath
+	End If
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub SetHTMLFilePath
+
+'*********************************************************************************************
+Sub GetVectorTables
+'*********************************************************************************************
+
+OnError GoTo HandleError
+
+	Dim i, j as Integer
+
+	j = 1
+	ReDim sTableList(j)
+	
+	sTableList(1) = "<-- Please select a table -->"
+	
+	For i = 1 to NumTables()
+
+		If IsPointLineOrPolygonTable(TableInfo(i, TAB_INFO_NAME)) > 0 Then
+			If NoOfColumns(TableInfo(i, TAB_INFO_NAME), sColumnsList) > 0 Then
+				j = j + 1
+				ReDim sTableList(j)
+				sTableList(j) = TableInfo(i, TAB_INFO_NAME)
+			End If
+		End If
+	Next
+
+Exit Sub
+'---------------------------
+HandleError:
+    Note Error$()
+
+End Sub GetVectorTables
+
+'**************************************************************
+Sub ProcessRegion(ByVal oRegion As Object, sGeoJSONGeomObjType As String, sCoordinates As String)
+'**************************************************************
+
+OnError GoTo HandleError
+
+Dim	iNumPol, iNumNodes, i, j As Integer,
+	oSubObjArray(), oCur, oEmptyObj As Object,
+	sSubCoordinatesArray(), sSubCoordinates, sFinalString As String
+
+	sGeoJSONGeomObjType = ""
+	sCoordinates = ""
+	
+	If not ObjectInfo(oRegion, OBJ_INFO_TYPE) = OBJ_TYPE_REGION Then
+		Exit Sub
+	End If
+
+	iNumPol = ObjectInfo(oRegion,OBJ_INFO_NPOLYGONS)
+
+	Redim oSubObjArray(iNumPol)
+	Redim sSubCoordinatesArray(iNumPol)
+	
+	For i = 1 To iNumPol
+		sSubCoordinates = ""
+		iNumNodes = ObjectInfo(oRegion,OBJ_INFO_NPOLYGONS+i)
+
+		Create Region
+			Into Variable oCur
+			1 1 (Format$(CentroidX(oRegion), "0.######"),Format$(CentroidY(oRegion), "0.######"))  'one dummy point (to fool centroid function)
+		For j = 1 To iNumNodes
+			Alter Object oCur
+				Node Add Position 1, j+1 (Format$(ObjectNodeX(oRegion,i,j), "0.######"),Format$(ObjectNodeY(oRegion,i,j), "0.######"))
+
+			If j = 1 Then
+				sSubCoordinates = "[ "
+			End If
+
+			sSubCoordinates = sSubCoordinates + " [" + Format$(ObjectNodeX(oRegion,i,j), "0.######") + ", " + Format$(ObjectNodeY(oRegion,i,j), "0.######") + "]"
+
+			If j < iNumNodes Then
+				sSubCoordinates = sSubCoordinates + ","
+			Else
+				sSubCoordinates = sSubCoordinates + " ]"
+			End If
+
+		Next
+		Alter Object oCur Node Remove Position 1,1  'delete dummy centroid to force MI to recalc it
+
+		oSubObjArray(i) = oCur
+		sSubCoordinatesArray(i) = sSubCoordinates
+		
+	Next
+
+	For i = 1 To Ubound(oSubObjArray)
+		oCur = oSubObjArray(i)
+		For j = 1 To Ubound(oSubObjArray)
+			If i <> j Then
+				If oCur Contains Entire oSubObjArray(j) Then 'hole
+					sSubCoordinatesArray(i) = sSubCoordinatesArray(i) + ", " + sSubCoordinatesArray(j)
+					sSubCoordinatesArray(j) = ""
+					Create Region Into Variable oEmptyObj 0
+					oSubObjArray(j) = oEmptyObj
+					oCur = Erase(oCur, oSubObjArray(j))
+					oSubObjArray(i) = oCur
+				End if
+			End If
+		Next	'j
+	Next	'i
+	j = 0
+	For i = 1 to UBound(sSubCoordinatesArray)
+		If sSubCoordinatesArray(i) <> "" Then
+			j = j + 1
+		End If
+	Next
+	If j = 1 Then
+		For i = 1 to UBound(sSubCoordinatesArray)
+			sFinalString = sFinalString + sSubCoordinatesArray(i)
+		Next
+		sGeoJSONGeomObjType = "Polygon"
+	Else
+		For i = 1 to UBound(sSubCoordinatesArray)
+			If sSubCoordinatesArray(i) <> "" Then
+				sFinalString = sFinalString + "[" + sSubCoordinatesArray(i) + "]"
+				If i < UBound(sSubCoordinatesArray) Then
+					sFinalString = sFinalString + ", "
+				End If
+			End If
+		Next
+		sGeoJSONGeomObjType = "MultiPolygon"
+		
+	End If
+	sCoordinates = sFinalString
+
+Exit Sub
+'---------------------------
+HandleError:
+    Note Error$()
+
+End Sub ProcessRegion
+
+'**************************************************************
+Sub ProcessPline(ByVal oPline As Object, sGeoJSONGeomObjType As String, sCoordinates As String)
+'**************************************************************
+
+OnError GoTo HandleError
+
+Dim	iNumSec, iNumNodes, i, j As Integer,
+	sSubCoordinatesArray(), sSubCoordinates, sFinalString As String
+
+	sGeoJSONGeomObjType = ""
+	sCoordinates = ""
+	
+	If not ObjectInfo(oPline, OBJ_INFO_TYPE) = OBJ_TYPE_PLINE Then
+		Exit Sub
+	End If
+
+	iNumSec = ObjectInfo(oPline,OBJ_INFO_NPOLYGONS) 'number of sections
+
+	Redim sSubCoordinatesArray(iNumSec)
+	
+	For i = 1 To iNumSec
+		sSubCoordinates = ""
+		iNumNodes = ObjectInfo(oPline,OBJ_INFO_NPOLYGONS+i)
+
+		For j = 1 To iNumNodes
+
+			sSubCoordinates = sSubCoordinates + " [" + Format$(ObjectNodeX(oPline,i,j), "0.######") + ", " + Format$(ObjectNodeY(oPline,i,j), "0.######") + "]"
+
+			If j < iNumNodes Then
+				sSubCoordinates = sSubCoordinates + ","
+			End If
+
+		Next
+
+		sSubCoordinatesArray(i) = sSubCoordinates
+		
+	Next
+
+	If UBound(sSubCoordinatesArray) = 1 Then
+		sFinalString = sSubCoordinatesArray(1)
+		sGeoJSONGeomObjType = "LineString"
+	Else
+		For i = 1 to UBound(sSubCoordinatesArray)
+			sFinalString = sFinalString + "[" + sSubCoordinatesArray(i) + "]"
+			If i < UBound(sSubCoordinatesArray) Then
+				sFinalString = sFinalString + ", "
+			End If
+		Next
+		sGeoJSONGeomObjType = "MultiLineString"
+	End If
+	sCoordinates = sFinalString
+
+Exit Sub
+'---------------------------
+HandleError:
+    Note Error$()
+
+End Sub ProcessPline
+
+'************************************************************************************
+Sub ResetThemeValues 
+'************************************************************************************
+
+OnError Goto HandleError
+
+	lExportTheme = FALSE
+	sThemeLayer = ""
+	sThemeCol = ""
+	ReDim sValuesArray(0)
+	ReDim sColorValsArray(0)
+	sMaxValue = ""
+	sDefaultColor = ""
+	iNoOfThemes = 0
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub ResetThemeValues
+

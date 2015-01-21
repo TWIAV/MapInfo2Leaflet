@@ -1,0 +1,189 @@
+'************************************************************************************
+'**  MapInfo2Leaflet64 (for the 64 bit version MapInfo Pro 12.5.1 or higher)
+'**  Base Module
+'**  
+'**  Author:	Egge-Jan Pollé
+'**  Date:		20 January 2015
+'************************************************************************************
+Include "MapInfo2Leaflet64.def"
+
+'************************************************************************************
+Sub Main
+'************************************************************************************
+
+OnError Goto HandleError
+
+	Dim ribbonGroupsColl As This
+	Dim ribbonGroup As This
+	Dim ribbonTabToolTip As This
+		
+	sDescription = "Export a MapInfo Table to a Web Map Application using Leaflet"
+
+	Call RegisterUriParser(New_GenericUriParser(1), "pack", -1)
+
+	'Get MI Pro interface
+	mapinfoApplication = SystemInfo(SYS_INFO_IMAPINFOAPPLICATION)
+	
+	'Get handle to current application
+	thisApp = MapBasicApplication(mapinfoApplication, ApplicationName$())
+	
+	'Get Ribbon
+	Ribbon = GetRibbon(mapinfoApplication)
+	
+	'Get RibbonTabs Collection
+	RibbonTabColl = GetTabsColl(Ribbon)
+	
+	'Add a new Tab to RibbonTabs collection
+	RibbonTab = RbnTabCollAddStrStr (RibbonTabColl, "Web", "WEB")
+	'Set the KeyTip for the RibbonTab. KeyTip: The keyboard shortcut for the tab. A KeyTip must have from 1 to 3 uppercase characters.
+	Call SetRbnItemKeyTip(RibbonTab, "W")
+	
+	'Add a group to the newly added tab.
+	'Get the ribbon group collection.
+	ribbonGroupsColl = GetRbnTabGrps(RibbonTab)
+	
+	'Add a new group.
+	ribbonGroup = RbnCtrlGrpCollAddStrStr(ribbonGroupsColl, "Export", "Export")
+		
+	'Get Group controls collection
+	Dim groupControlColl As This
+	groupControlColl = GetRbnCtrlGrpCtrls(ribbonGroup)
+	'Disable the RibbonDialogLauncher. (A RibbonDialogLauncher is displayed in the lower-right corner of a group by default.)
+	Call SetRbnCtrlGrpIsLauncherVisible(ribbonGroup, FALSE)
+	
+	'Add a button to the ribbon group
+	buttonLFLT = MICtrlCollAddStrStrInt(groupControlColl, "ExportDialog", AppName, ControlType_Button)
+	Call SetRbnBtnCtrlIsLarge(buttonLFLT, TRUE)
+	'Set the KeyTip for the RibbonButton. KeyTip: A string that represents the keyboard shortcut of the button. A KeyTip must have from 1 to 3 uppercase characters.
+	Call SetRbnBtnCtrlKeyTip(buttonLFLT, "M")
+
+	'Create & Set the button tooltip
+	Dim buttonLFLTToolTip As This
+	buttonLFLTToolTip = New_MapInfoRibbonToolTip()
+	Call SetMIRbnToolTipToolTipDescription (buttonLFLTToolTip, AppName)
+	Call SetMIRbnToolTipToolTipText (buttonLFLTToolTip, sDescription)
+	'Disable default help text in button tooltip
+	Call SetMIRbnToolTipShowHelpText(buttonLFLTToolTip, FALSE)
+	Call SetRbnBtnCtrlToolTip(buttonLFLT, buttonLFLTToolTip)
+	
+	'Set the button icon
+	Call SetRbnBtnCtrlLargeIcon(buttonLFLT, New_Uri(LFLTIcon, 0))
+	Call SetRbnBtnCtrlSmallIcon(buttonLFLT, New_Uri(LFLTIcon, 0))
+	
+	'Set MapInfo command to the button
+	Call SetRbnBtnCtrlCallingHandler(buttonLFLT, "ExportDialog")
+
+	Call SetRbnTabIsSelected(RibbonTab, TRUE)
+	
+	iMIColor = RED
+	sObjectColor = hexCol(iMIColor)
+	iPointShape = 1
+	iPointSize = 12
+	
+	Done:
+		ribbonGroupsColl = NULL_PTR
+		ribbonGroup = NULL_PTR
+		groupControlColl = NULL_PTR
+		ribbonTabToolTip = NULL_PTR
+		buttonLFLTToolTip = NULL_PTR
+		
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+	Resume Done
+
+End Sub Main
+
+'************************************************************************************
+Sub AddIn_About
+'************************************************************************************
+
+	Dialog 
+		Title "About " + AppName + " (Version " + AppVersion + ")" 
+		Control StaticText Title "With " + AppName + " you can export a MapInfo table to a web mapping application" Position 1dW, 1dH
+		Control StaticText Title "using Leaflet - the output consists of an html file, a json file (containing a GeoJSON" Position 1dW, 2dH
+		Control StaticText Title "FeatureCollection) and css files for the styling." Position 1dW, 3dH
+		Control StaticText Title "Optionally you can export a thematic layer to color the geometry based on attribute data." Position 1dW, 5dH
+		Control StaticText Title "Leaflet is a modern open-source JavaScript library for mobile-friendly interactive maps." Position 1dW, 7dH
+		Control StaticText Title "More information:" Position 1dW, 9dH
+		Control Button Title "http://leafletjs.com/" Position 16dW, 9dH Calling LeafletWebsite
+		Control StaticText Title "This version is compatible with the 64 bit version of MapInfo Pro" Position 1dW, 11.5dH
+		Control StaticText Title "(version 12.5.1 or higher)" Position 1dW, 12.5dH
+		Control StaticText Title Chr$(169) + " 2014-" + Year(CurDate()) + " - TWIAV.NL" Position 43dW, 14dH
+		Control OKButton Title "&OK"
+		Control Button Title "&Help" Calling AddIn_Help
+
+End Sub AddIn_About
+
+'************************************************************************************
+Sub LeafletWebsite
+'************************************************************************************
+
+OnError Goto HandleError
+
+	Call OpenFileOrDir("http://leafletjs.com/")
+
+Exit Sub
+'---------------------------
+HandleError:
+	Note Error$()
+
+End Sub LeafletWebsite
+
+'************************************************************************************
+ Sub AddIn_Help
+'************************************************************************************
+
+	Call OpenFileOrDir(ApplicationDirectory$() + "Documentation\MapInfo2Leaflet User Guide.pdf")
+
+End Sub AddIn_Help
+
+'************************************************************************************
+Sub AddIn_DefaultCommand
+' Associates a default command with the tool loaded in Tool Manager
+'************************************************************************************
+
+	Call ExportDialog
+
+End Sub AddIn_DefaultCommand
+
+'************************************************************************************
+Function AddIn_Name() As String
+ 
+ 	AddIn_Name = AppName
+ 
+End Function
+
+'************************************************************************************
+Function AddIn_Description() As String
+
+	AddIn_Description = AppDescription
+
+End Function
+
+'************************************************************************************
+Function AddIn_Version() As String
+
+	AddIn_Version = AppVersion
+
+End Function
+
+'*********************************************************************************************
+Function AddIn_ImageUri() As String
+
+	AddIn_ImageUri = ApplicationLogo
+
+End Function
+
+'************************************************************************************
+Sub EndHandler
+'************************************************************************************
+
+	'Remove the added Tab.
+	Dim removed As Logical
+	removed = RbnTabCollRemove(RibbonTabColl, RibbonTab)
+
+End Sub EndHandler
+
+'************************************************************************************

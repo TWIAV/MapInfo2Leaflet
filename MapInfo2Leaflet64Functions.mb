@@ -1,0 +1,324 @@
+'************************************************************************************
+'**  MapInfo2Leaflet64 (for the 64 bit version MapInfo Pro 12.5.1 or higher)
+'**  
+'**  
+'**  Author:	Egge-Jan Pollé
+'**  Date:		20 January 2015
+'************************************************************************************
+Include "MapInfo2Leaflet64.def"
+
+'************************************************************************************
+Function IsPointLineOrPolygonTable(ByVal sTable As String) As Integer
+
+OnError GoTo HandleError
+
+	Dim sQuery, sType As String
+	Dim i As Integer
+	
+	IsPointLineOrPolygonTable = -1
+	
+	sQuery = "Select obj from " + sTable + " Group By 1 Into TestTable"
+	Run Command sQuery
+	
+	For i = 1 to TableInfo("TestTable", TAB_INFO_NROWS)
+		Fetch Rec i From TestTable
+		If i = 1 Then
+			If TestTable.Col1 IN ("Point", "Multipoint") Then ' GeoJSON Point and MultiPoint
+				sType = "Point"
+				IsPointLineOrPolygonTable = 1
+			ElseIf TestTable.Col1 IN ("Arc", "Line", "Polyline") Then 'GeoJSON LineString and MultiLineString
+				sType = "Line"
+				IsPointLineOrPolygonTable = 2
+			ElseIf TestTable.Col1 IN ("Ellipse", "Region", "Rectangle", "Rounded Rectangle") Then 'GeoJSON Polygon and MultiPolygon
+				sType = "Polygon"
+				IsPointLineOrPolygonTable = 3
+			End If
+		Else
+			If sType = "Point" And TestTable.Col1 IN ("Point", "Multipoint") Then ' GeoJSON Point and MultiPoint
+				IsPointLineOrPolygonTable = 1
+			ElseIf sType = "Line" And TestTable.Col1 IN ("Arc", "Line", "Polyline") Then 'GeoJSON LineString and MultiLineString
+				IsPointLineOrPolygonTable = 2
+			ElseIf sType = "Polygon" And TestTable.Col1 IN ("Ellipse", "Region", "Rectangle", "Rounded Rectangle") Then 'GeoJSON Polygon and MultiPolygon
+				IsPointLineOrPolygonTable = 3
+			Else
+				IsPointLineOrPolygonTable = -1
+			End If
+		End If
+	Next
+	Close Table TestTable
+
+Exit Function
+'---------------------------
+HandleError:
+    IsPointLineOrPolygonTable = -1
+
+End Function
+
+'************************************************************************************
+Function NoOfColumns (ByVal sTab As String, sColumnsList() As String) As Integer
+'*********************************************************************************************
+
+	Dim iCounter, jCounter as Integer
+	
+	jCounter = 1
+	ReDim sColumnsList(jCounter)
+
+	sColumnsList(1) = "<-- Please select a column -->"
+
+	For iCounter = 1 to NumCols(sTab)
+			jCounter = jCounter + 1
+			ReDim sColumnsList(jCounter)
+			sColumnsList(jCounter) = ColumnInfo(sTab,"COL" & iCounter ,COL_INFO_NAME)
+	Next
+	
+	NoOfColumns = UBound(sColumnsList) - 1
+	
+End Function
+
+'************************************************************************************
+Function LooksLikeURL(ByVal sPotentialURL As String) As Logical
+'************************************************************************************
+
+	If LCase$(Left$(sPotentialURL,4)) = "http" Then
+		LooksLikeURL = TRUE
+	Else
+		LooksLikeURL = FALSE
+	End If
+
+End Function
+
+'*********************************************************************************************
+Function LayerIsInMap(ByVal iWindowID As Integer, ByVal sLayerName As String) As Logical
+
+OnError Goto HandleError
+
+Dim iNumLayers, i As Integer
+	
+	LayerIsInMap = False
+
+	If WindowInfo(iWindowID, WIN_INFO_TYPE) = WIN_MAPPER Then
+
+		iNumLayers = MapperInfo(iWindowID, MAPPER_INFO_LAYERS)
+
+		For i = 1 To iNumLayers
+			If sLayerName = LayerInfo(iWindowID, i, LAYER_INFO_NAME) Then
+				LayerIsInMap = True
+				Exit For
+			End If
+		Next
+
+	End If
+
+Exit Function
+'---------------------------
+HandleError:
+  LayerIsInMap = False
+End Function
+
+'************************************************************************************
+
+Function ReplaceSubStringWith(ByVal sString2Modify As String, ByVal sReplaceSubString As String, ByVal sReplaceWith As String) As String
+	Dim iPtr1, iPtr2 as Integer
+	Dim sBegin, sEnd, sTemp As String
+	
+	sTemp = Chr$(169) + Chr$(38)+ Chr$(181) + Chr$(167) '©&µ§
+
+	If InStr(1, sString2Modify, sTemp) > 0 Or sReplaceSubString = sTemp Then 'Highly unlikely :-) But we'd better be sure :-) 
+		sTemp = Chr$(37) + Chr$(126)+ Chr$(64) + Chr$(62) '%~@>
+	End If
+
+	'Step 1: replace sReplaceSubString with temporary value
+	iPtr1 = InStr(1, sString2Modify, sReplaceSubString)
+
+	While (iPtr1 > 0)
+		sBegin = Left$(sString2Modify, iPtr1 - 1)
+		iPtr2 = iPtr1 + Len(sReplaceSubString) - 1 'If sReplaceSubString is a single character iPtr2 should be the same as iPtr1
+		sEnd = Right$(sString2Modify, Len(sString2Modify) - iPtr2)
+		sString2Modify = sBegin & sTemp & sEnd
+		iPtr1 = InStr(1, sString2Modify, sReplaceSubString)
+	Wend
+
+	'Step 2: replace temporary value with sReplaceWith.
+	'This 2-step approach allows for the sReplaceWith to contain sReplaceSubString, e.g. when you need to replace 'ab' with 'abc'
+	iPtr1 = InStr(1, sString2Modify, sTemp)
+
+	While (iPtr1 > 0)
+		sBegin = Left$(sString2Modify, iPtr1 - 1)
+		iPtr2 = iPtr1 + Len(sTemp) - 1
+		sEnd = Right$(sString2Modify, Len(sString2Modify) - iPtr2)
+		sString2Modify = sBegin & sReplaceWith & sEnd
+		iPtr1 = InStr(1, sString2Modify, sTemp)
+	Wend
+
+	ReplaceSubStringWith = sString2Modify
+
+End Function
+
+'**************************************************************
+
+Function ReplaceMultipleSubStrings(ByVal sString2Modify As String, Strings2Replace() As tString2Replace) As String
+
+	Dim i, iPtr1, iPtr2 as Integer
+	Dim sReplaceSubString, sReplaceWith, sBegin, sEnd, sTemp As String
+	
+	For i = 1 to UBound(Strings2Replace)
+	
+		sReplaceSubString = Strings2Replace(i).sReplaceSubString
+		sReplaceWith = Strings2Replace(i).sReplaceWith
+		sTemp = Chr$(169) + Chr$(38)+ Chr$(181) + Chr$(167) '©&µ§
+
+		If InStr(1, sString2Modify, sTemp) > 0 Or sReplaceSubString = sTemp Then 'Highly unlikely :-) But we'd better be sure :-) 
+			sTemp = Chr$(37) + Chr$(126)+ Chr$(64) + Chr$(62) '%~@>
+		End If
+
+		'Step 1: replace sReplaceSubString with temporary value
+		iPtr1 = InStr(1, sString2Modify, sReplaceSubString)
+
+		While (iPtr1 > 0)
+			sBegin = Left$(sString2Modify, iPtr1 - 1)
+			iPtr2 = iPtr1 + Len(sReplaceSubString) - 1 'If sReplaceSubString is a single character iPtr2 should be the same as iPtr1
+			sEnd = Right$(sString2Modify, Len(sString2Modify) - iPtr2)
+			sString2Modify = sBegin & sTemp & sEnd
+			iPtr1 = InStr(1, sString2Modify, sReplaceSubString)
+		Wend
+
+		'Step 2: replace temporary value with sReplaceWith.
+		'This 2-step approach allows for the sReplaceWith to contain sReplaceSubString, e.g. when you need to replace 'ab' with 'abc'
+		iPtr1 = InStr(1, sString2Modify, sTemp)
+
+		While (iPtr1 > 0)
+			sBegin = Left$(sString2Modify, iPtr1 - 1)
+			iPtr2 = iPtr1 + Len(sTemp) - 1
+			sEnd = Right$(sString2Modify, Len(sString2Modify) - iPtr2)
+			sString2Modify = sBegin & sReplaceWith & sEnd
+			iPtr1 = InStr(1, sString2Modify, sTemp)
+		Wend
+
+		ReplaceMultipleSubStrings = sString2Modify
+
+	Next
+
+End Function
+
+'**************************************************************
+
+Function ExtractThematicValues(ByVal sMapWindow As String, ByVal iMapWindowID As Integer, sThemeLayer As String,
+	sThemeCol As String, sValuesArray() As String, sColorValsArray() As String,
+	sMaxValue As String, sDefaultColor As String, iNoOfThemes As Integer) As Integer
+
+Dim i, j, m, n, p, q, r, iThematic As Integer
+Dim sRec As String
+
+Call ResetThemeValues
+
+Include "ReplacementStrings.mb"
+
+	ExtractThematicValues = -1
+	j = Len(sMapWindow)
+	n = 1
+	Do While n < j
+		m = InStr(n, sMapWindow, Chr$(10))
+		sRec = Mid$(sMapWindow, n, (m - n + 1))
+		n = m + 1
+
+		'look for the start of the shade clause
+		If Left$(sRec, 5) = "shade" Then
+			iNoOfThemes = iNoOfThemes + 1
+			If InStr(1, sRec, "ranges") > 0 Then
+				ExtractThematicValues = 1
+				iThematic = 1
+			ElseIf InStr(1, sRec, "values") > 0 Then
+				ExtractThematicValues = 2
+				iThematic = 2
+			Else
+				Exit Do
+			End If
+
+			'layer name
+			p = InStr(1, sRec, "shade ")
+			q = InStr(p + 6, sRec, Chr$(32))
+			sThemeLayer = LayerInfo(iMapWindowID, Mid$(sRec, p + 6, q - (p + 6)), LAYER_INFO_NAME)
+			p = InStr(1, sThemeLayer, "(")
+			sThemeLayer = Left$(sThemeLayer, p - 1)
+
+			'column name
+			p = InStr(1, sRec, "with ")
+			q = InStr(p + 5, sRec, Chr$(32))
+			sThemeCol = Mid$(sRec, p + 5, q - (p + 5))
+
+			' gather up all the lines in the shade clause
+			Do While n < j
+				If iThematic = 1 And InStr(1, sRec, ":") > 0 Then
+					sRec = LTrim$(sRec)
+					p = InStr(1, sRec, ":")
+					q = InStr(p + 2, sRec, Chr$(32))
+					r = UBound(sValuesArray) + 1
+					ReDim sValuesArray(r)
+					sValuesArray(r) = Mid$(sRec, 1, p - 1)
+					sMaxValue = Mid$(sRec, p + 2, q - (p + 2))
+
+					If InStr(1, sRec, "Brush") > 0 Or InStr(1, sRec, "Symbol") > 0 Then
+						p = InStr(1, sRec, "(")
+						p = InStr(p, sRec, ",")
+						q = InStr(p + 1, sRec, ",")
+					ElseIf InStr(1, sRec, "Line") > 0 Then
+						p = InStr(1, sRec, "(")
+						p = InStr(p, sRec, ",")
+						p = InStr(p + 1, sRec, ",")
+						q = InStr(p + 1, sRec, ")")
+					End If
+					r = UBound(sColorValsArray) + 1
+					ReDim sColorValsArray(r)
+					sColorValsArray(r) = hexCol(Mid$(sRec, p + 1, q - (p + 1)))
+				ElseIf iThematic = 2 And InStr(1, sRec, Chr$(34)) > 0 Then
+					sRec = LTrim$(sRec)
+					p = InStr(1, sRec, Chr$(34))
+					q = InStr(p + 1, sRec, Chr$(34))
+					r = UBound(sValuesArray) + 1
+					ReDim sValuesArray(r)
+					sValuesArray(r) = Mid$(sRec, p + 1, q - (p + 1))
+					sValuesArray(r) = ReplaceMultipleSubStrings(sValuesArray(r), tHTMLCharacters)
+					sMaxValue = ""
+
+					If InStr(1, sRec, "Brush") > 0 Or InStr(1, sRec, "Symbol") > 0 Then
+						p = InStr(1, sRec, "(")
+						p = InStr(p, sRec, ",")
+						q = InStr(p + 1, sRec, ",")
+					ElseIf InStr(1, sRec, "Line") > 0 Then
+						p = InStr(1, sRec, "(")
+						p = InStr(p, sRec, ",")
+						p = InStr(p + 1, sRec, ",")
+						q = InStr(p + 1, sRec, ")")
+					End If
+					r = UBound(sColorValsArray) + 1
+					ReDim sColorValsArray(r)
+					sColorValsArray(r) = hexCol(Mid$(sRec, p + 1, q - (p + 1)))
+				End If
+				If InStr(1, sRec, "default") > 0 Then
+					sRec = LTrim$(sRec)
+					If InStr(1, sRec, "Brush") > 0 Or InStr(1, sRec, "Symbol") > 0 Then
+						p = InStr(1, sRec, "(")
+						p = InStr(p, sRec, ",")
+						q = InStr(p + 1, sRec, ",")
+					ElseIf InStr(1, sRec, "Line") > 0 Then
+						p = InStr(1, sRec, "(")
+						p = InStr(p, sRec, ",")
+						p = InStr(p + 1, sRec, ",")
+						q = InStr(p + 1, sRec, ")")
+					End If
+					sDefaultColor = hexCol(Mid$(sRec, p + 1, q - (p + 1)))
+					Exit Do
+				End If
+				m = InStr(n, sMapWindow, Chr$(10))
+				sRec = Mid$(sMapWindow, n, (m - n + 1))
+				n = m + 1
+			Loop
+		End If
+
+		' if any thematic clause (ranges or values) was found, exit the loop
+		If Len(sThemeLayer) > 0 Then
+			Exit Do
+		End If
+	Loop
+
+End Function
