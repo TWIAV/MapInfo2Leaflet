@@ -3,7 +3,7 @@
 '**  Base Module
 '**  
 '**  Author:	Egge-Jan Pollé
-'**  Date:		20 January 2015
+'**  Date:		21 August 2015
 '************************************************************************************
 Include "MapInfo2Leaflet64.def"
 
@@ -16,7 +16,9 @@ OnError Goto HandleError
 	Dim ribbonGroupsColl As This
 	Dim ribbonGroup As This
 	Dim ribbonTabToolTip As This
-		
+
+	Set Format Number "9,999.9"	
+
 	sDescription = "Export a MapInfo Table to a Web Map Application using Leaflet"
 
 	Call RegisterUriParser(New_GenericUriParser(1), "pack", -1)

@@ -3,7 +3,7 @@
 '**  
 '**  
 '**  Author:	Egge-Jan Pollé
-'**  Date:		20 January 2015
+'**  Date:		21 August 2015
 '**  Version:	AppVersion (see below)
 '************************************************************************************
 Include "MAPBASIC.DEF"
@@ -137,7 +137,7 @@ Declare Function ReplaceMultipleSubStrings(	'Function similar to the function Re
 	) As String
 
 Define AppName "MapInfo2Leaflet"
-Define AppVersion "0.5.0"
+Define AppVersion "0.5.1"
 
 'Define the "Application Logo" as it will be shown in the Tool Manager
 Define ApplicationLogo ApplicationDirectory$() + "img\favicon.png" 'This is the favicon of the website http://leafletjs.com/

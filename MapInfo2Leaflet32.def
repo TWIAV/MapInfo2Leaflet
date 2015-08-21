@@ -3,7 +3,7 @@
 '**  
 '**  
 '**  Author:	Egge-Jan Pollé
-'**  Date:		3 January 2015
+'**  Date:		21 August 2015
 '**  Version:	AppVersion (see below)
 '************************************************************************************
 Include "MAPBASIC.DEF"
@@ -123,7 +123,7 @@ Declare Function ReplaceMultipleSubStrings(	'Function similar to the function Re
 
 Define AppName "MapInfo2Leaflet"
 Define AppNameMenu "MapInfo&2Leaflet"
-Define AppVersion "0.36"
+Define AppVersion "0.37"
 
 'Defining Dialog Width and Height
 'This allows you to specify width and height clauses in terms of characters (i.e., Width 30dW, Height 10dH).
